@@ -1,6 +1,6 @@
-import {and,eq,gt,isNull,desc,inArray} from "drizzle-orm";
+import {and,eq,gt,lt,isNull,desc,inArray,ne,sql} from "drizzle-orm";
 import {database} from "@/lib/db";
-import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders} from "@/lib/db/schema";
+import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders,reservations} from "@/lib/db/schema";
 import {newToken,tokenHash} from "@/lib/domain/auth";
 import {tableContext,lockDemoWrite} from "@/lib/demo-context";
 import {OrderError} from "@/lib/ordering";
@@ -10,7 +10,7 @@ export async function listTables(restaurantId:string){
  const tables=await db.select().from(restaurantTables).where(eq(restaurantTables.restaurantId,restaurantId)).orderBy(restaurantTables.label);
  const sessions=await db.select({id:tableSessions.id,tableId:tableSessions.tableId,waiterUserId:tableSessions.waiterUserId,expiresAt:tableSessions.expiresAt}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),isNull(tableSessions.closedAt)));
  const waiters=await db.select({id:staff.userId,name:users.name}).from(staff).innerJoin(users,eq(users.id,staff.userId)).where(and(eq(staff.restaurantId,restaurantId),eq(staff.role,"waiter"),eq(staff.active,true),eq(users.active,true)));
- return {tables,sessions,waiters};
+ const now=new Date();const reserved=await db.select({tableId:reservations.tableId}).from(reservations).where(and(eq(reservations.restaurantId,restaurantId),inArray(reservations.status,["confirmed","checked_in"]),lt(reservations.startsAt,new Date(now.getTime()+30*60000)),gt(reservations.endsAt,now)));return {tables,sessions,waiters,reserved};
 }
 export async function openTable(restaurantId:string,tableId:string,waiterId:string|null){
  const token=newToken(),db=database();
@@ -66,4 +66,19 @@ export async function rotateTableToken(restaurantId:string,id:string){
  const token=newToken();
  const changed=await database().update(tableSessions).set({tokenHash:tokenHash(token)}).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).returning({id:tableSessions.id});
  if(!changed.length)throw new OrderError("Session expired or closed");return token;
+}
+
+export async function moveTableSession(restaurantId:string,id:string,targetId:string,waiterId:string|null){
+ const token=newToken();
+ await database().transaction(async tx=>{
+ if(!await lockDemoWrite(tx,restaurantId))throw new OrderError("Demo session expired");
+ const [s]=await tx.select().from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");if(!s)throw new OrderError("Session unavailable");
+ const [target]=await tx.select().from(restaurantTables).where(and(eq(restaurantTables.restaurantId,restaurantId),eq(restaurantTables.id,targetId),eq(restaurantTables.active,true),eq(restaurantTables.cleaning,false))).for("update");if(!target)throw new OrderError("Target table unavailable");
+ const [occupied]=await tx.select({id:tableSessions.id}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.tableId,targetId),ne(tableSessions.id,id),isNull(tableSessions.closedAt)));if(occupied)throw new OrderError("Target table occupied");
+ const now=new Date();const [reservation]=await tx.select({id:reservations.id}).from(reservations).where(and(eq(reservations.restaurantId,restaurantId),eq(reservations.tableId,targetId),inArray(reservations.status,["confirmed","checked_in"]),lt(reservations.startsAt,new Date(now.getTime()+30*60000)),gt(reservations.endsAt,now)));if(targetId!==s.tableId&&reservation)throw new OrderError("Target table reserved");
+ if(waiterId){const [w]=await tx.select({id:staff.userId}).from(staff).innerJoin(users,eq(staff.userId,users.id)).where(and(eq(staff.restaurantId,restaurantId),eq(staff.userId,waiterId),eq(staff.role,"waiter"),eq(staff.active,true),eq(users.active,true)));if(!w)throw new OrderError("Waiter unavailable");}
+ const [billed]=await tx.execute(sql`select 1 from invoices where restaurant_id=${restaurantId} and table_session_id=${id} limit 1`);if(billed)throw new OrderError("Invoiced sessions cannot move");
+ await tx.update(tableSessions).set({tableId:targetId,waiterUserId:waiterId,tokenHash:tokenHash(token)}).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id)));
+ });
+ return token;
 }
