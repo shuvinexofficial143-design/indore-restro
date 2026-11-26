@@ -21,7 +21,9 @@ try{
  await guest.getByRole("button",{name:"Add",exact:true}).click();
  await guest.getByRole("button",{name:"View cart"}).click();
  await guest.getByRole("button",{name:"Continue to checkout"}).click();
+ const submission=guest.waitForResponse(r=>r.url().endsWith("/api/orders")&&r.request().method()==="POST");
  await guest.getByRole("button",{name:"Place demo order"}).click();
+ const response=await submission;assert.equal(response.status(),201,await response.text());
  await guest.waitForURL("**/track/**");
  await guest.getByRole("heading",{name:"pending",exact:true}).waitFor();
  const tracking=guest.url().split("/").pop();
