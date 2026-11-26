@@ -2,12 +2,9 @@ import {and,eq,gt,isNull,desc,inArray} from "drizzle-orm";
 import {database} from "@/lib/db";
 import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders} from "@/lib/db/schema";
 import {newToken,tokenHash} from "@/lib/domain/auth";
+import {tableContext} from "@/lib/demo-context";
 import {OrderError} from "@/lib/ordering";
-export async function getTable(token:string){
- if(!/^[a-f0-9]{64}$/.test(token)||!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")return null;
- const [row]=await database().select({id:tableSessions.id,label:restaurantTables.label,expiresAt:tableSessions.expiresAt}).from(tableSessions).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId),eq(restaurantTables.active,true))).innerJoin(restaurants,and(eq(restaurants.id,tableSessions.restaurantId),eq(restaurants.slug,"royal-table"),eq(restaurants.demo,true))).where(and(eq(tableSessions.tokenHash,tokenHash(token)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).limit(1);
- return row??null;
-}
+export async function getTable(token:string){return tableContext(token)}
 export async function listTables(restaurantId:string){
  const db=database();
  const tables=await db.select().from(restaurantTables).where(eq(restaurantTables.restaurantId,restaurantId)).orderBy(restaurantTables.label);
@@ -40,9 +37,9 @@ export async function closeTable(restaurantId:string,id:string){
  });
 }
 export async function createTableRequest(token:string,kind:"waiter"|"bill"){
- if(!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")throw new OrderError("Requests unavailable",503);
+ const context=await tableContext(token);if(!context)throw new OrderError("Session expired",404);
  await database().transaction(async tx=>{
-  const [s]=await tx.select({id:tableSessions.id,restaurantId:tableSessions.restaurantId}).from(tableSessions).innerJoin(restaurants,and(eq(restaurants.id,tableSessions.restaurantId),eq(restaurants.demo,true),eq(restaurants.slug,"royal-table"))).where(and(eq(tableSessions.tokenHash,tokenHash(token)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");
+  const [s]=await tx.select({id:tableSessions.id,restaurantId:tableSessions.restaurantId}).from(tableSessions).innerJoin(restaurants,and(eq(restaurants.id,tableSessions.restaurantId),eq(restaurants.demo,true))).where(and(eq(tableSessions.restaurantId,context.restaurantId),eq(tableSessions.tokenHash,tokenHash(token)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");
   if(!s)throw new OrderError("Session expired",404);
   await tx.insert(waiterRequests).values({restaurantId:s.restaurantId,sessionId:s.id,kind}).onConflictDoNothing();
  });

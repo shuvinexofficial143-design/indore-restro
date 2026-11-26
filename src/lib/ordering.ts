@@ -5,27 +5,29 @@ import {restaurants,menuItems,orders,orderItems,orderStatusHistory,tableSessions
 import {sampleCatalog,type CatalogItem} from "@/lib/catalog";
 import {unitPrice} from "@/lib/domain/cart";
 import {tokenHash} from "@/lib/domain/auth";
+import {orderingRestaurant,allowedRestaurant,tableContext} from "@/lib/demo-context";
 import {consumeOrder} from "@/lib/inventory";
 import {canTransition,type OrderStatus} from "@/lib/domain/order";
 export const tokenSchema=z.string().regex(/^[a-f0-9]{64}$/);
 export const orderInput=z.object({token:tokenSchema,kind:z.enum(["dine_in","takeaway","delivery"]),instructions:z.string().trim().max(300).default(""),tableToken:tokenSchema.optional(),lines:z.array(z.object({id:z.string().min(1).max(80),variant:z.enum(["full","half"]),addon:z.boolean(),quantity:z.number().int().min(1).max(20)})).min(1).max(30)});
 export class OrderError extends Error{constructor(message:string,public status=400){super(message)}}
-export async function getCatalog():Promise<{items:CatalogItem[];enabled:boolean}>{
- if(!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")return {items:sampleCatalog,enabled:false};
- const db=database(),[r]=await db.select({id:restaurants.id}).from(restaurants).where(and(eq(restaurants.slug,"royal-table"),eq(restaurants.demo,true))).limit(1);
+export async function getCatalog(verifiedTableRestaurantId?:string):Promise<{items:CatalogItem[];enabled:boolean}>{
+ const r=verifiedTableRestaurantId?(await allowedRestaurant(verifiedTableRestaurantId)?{id:verifiedTableRestaurantId}:null):await orderingRestaurant();
+ if(!r)return {items:sampleCatalog,enabled:false};const db=database();
  if(!r)return {items:sampleCatalog,enabled:false};
  const items=await db.select({id:menuItems.id,name:menuItems.name,category:menuItems.category,description:menuItems.description,image:menuItems.image,veg:menuItems.veg,available:menuItems.available,pricePaise:menuItems.pricePaise,halfPaise:menuItems.halfPaise,addonPaise:menuItems.addonPaise,prepMinutes:menuItems.prepMinutes}).from(menuItems).where(eq(menuItems.restaurantId,r.id)).orderBy(menuItems.category,menuItems.name);
  return {items,enabled:items.length>0};
 }
 export async function createDemoOrder(raw:unknown){
- if(!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")throw new OrderError("Demo ordering is not enabled.",503);
+ if(!process.env.DATABASE_URL)throw new OrderError("Demo ordering is not enabled.",503);
  const parsed=orderInput.safeParse(raw);if(!parsed.success)throw new OrderError("Invalid order details");
  const {token,lines,kind,instructions,tableToken}=parsed.data;
  const key=tokenHash(token),requestHash=tokenHash(JSON.stringify({lines,kind,instructions,tableToken}));
+ const table=tableToken?await tableContext(tableToken):null;
+ if(tableToken&&!table)throw new OrderError("Table session expired",409);
+ const r=table?{id:table.restaurantId}:await orderingRestaurant();if(!r)throw new OrderError("Demo restaurant unavailable",503);
  const db=database();
  return db.transaction(async tx=>{
-  const [r]=await tx.select({id:restaurants.id}).from(restaurants).where(and(eq(restaurants.slug,"royal-table"),eq(restaurants.demo,true))).limit(1);
-  if(!r)throw new OrderError("Demo restaurant unavailable",503);
   const [existing]=await tx.select({id:orders.id,requestHash:orders.requestHash,restaurantId:orders.restaurantId,totalPaise:orders.totalPaise}).from(orders).where(eq(orders.trackingHash,key));
   if(existing){if(existing.requestHash!==requestHash||existing.restaurantId!==r.id)throw new OrderError("Order key already used",409);return {id:existing.id,totalPaise:existing.totalPaise,reused:true};}
   let tableSessionId:string|null=null;
@@ -42,10 +44,10 @@ export async function createDemoOrder(raw:unknown){
  });
 }
 export async function trackDemoOrder(token:string){
- if(!tokenSchema.safeParse(token).success||!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")return null;
+ if(!tokenSchema.safeParse(token).success||!process.env.DATABASE_URL)return null;
  const db=database();
- const [order]=await db.select({id:orders.id,status:orders.status,kind:orders.kind,totalPaise:orders.totalPaise,createdAt:orders.createdAt,restaurantId:orders.restaurantId}).from(orders).innerJoin(restaurants,and(eq(restaurants.id,orders.restaurantId),eq(restaurants.demo,true),eq(restaurants.slug,"royal-table"))).where(eq(orders.trackingHash,tokenHash(token))).limit(1);
- if(!order)return null;
+ const [order]=await db.select({id:orders.id,status:orders.status,kind:orders.kind,totalPaise:orders.totalPaise,createdAt:orders.createdAt,restaurantId:orders.restaurantId}).from(orders).innerJoin(restaurants,and(eq(restaurants.id,orders.restaurantId),eq(restaurants.demo,true))).where(eq(orders.trackingHash,tokenHash(token))).limit(1);
+ if(!order||!await allowedRestaurant(order.restaurantId))return null;
  const items=await db.select({name:orderItems.name,quantity:orderItems.quantity,variant:orderItems.variant,addon:orderItems.addon,unitPaise:orderItems.unitPaise}).from(orderItems).where(and(eq(orderItems.restaurantId,order.restaurantId),eq(orderItems.orderId,order.id)));
  const history=await db.select({status:orderStatusHistory.status,createdAt:orderStatusHistory.createdAt}).from(orderStatusHistory).where(and(eq(orderStatusHistory.restaurantId,order.restaurantId),eq(orderStatusHistory.orderId,order.id))).orderBy(desc(orderStatusHistory.createdAt));
  return {id:order.id,status:order.status,kind:order.kind,totalPaise:order.totalPaise,createdAt:order.createdAt,items,history};
