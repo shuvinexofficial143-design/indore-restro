@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@theme {
+  --color-royal-ink: #171512;
+  --color-royal-cream: #f8f1e6;
+  --color-royal-gold: #c9a45d;
+}
+:root { color-scheme: dark; }
+body { margin: 0; background: #171512; color: #f8f1e6; font-family: Arial, Helvetica, sans-serif; }
+:focus-visible { outline: 2px solid #c9a45d; outline-offset: 4px; }
