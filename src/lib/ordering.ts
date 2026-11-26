@@ -1,15 +1,16 @@
 import {and,eq,inArray,desc,isNull,gt,sql} from "drizzle-orm";
 import {z} from "zod";
 import {database} from "@/lib/db";
-import {restaurants,menuItems,orders,orderItems,orderStatusHistory,tableSessions,restaurantTables} from "@/lib/db/schema";
+import {restaurants,menuItems,orders,orderItems,orderStatusHistory,tableSessions,restaurantTables,restaurantSettings,coupons,couponUsages} from "@/lib/db/schema";
 import {sampleCatalog,type CatalogItem} from "@/lib/catalog";
+import {priceOrder} from "@/lib/domain/pricing";
 import {unitPrice} from "@/lib/domain/cart";
 import {tokenHash} from "@/lib/domain/auth";
 import {orderingRestaurant,allowedRestaurant,tableContext,lockDemoWrite} from "@/lib/demo-context";
 import {consumeOrder} from "@/lib/inventory";
 import {canTransition,type OrderStatus} from "@/lib/domain/order";
 export const tokenSchema=z.string().regex(/^[a-f0-9]{64}$/);
-export const orderInput=z.object({token:tokenSchema,kind:z.enum(["dine_in","takeaway","delivery"]),instructions:z.string().trim().max(300).default(""),tableToken:tokenSchema.optional(),lines:z.array(z.object({id:z.string().min(1).max(80),variant:z.enum(["full","half"]),addon:z.boolean(),quantity:z.number().int().min(1).max(20)})).min(1).max(30)});
+export const orderInput=z.object({token:tokenSchema,kind:z.enum(["dine_in","takeaway","delivery"]),instructions:z.string().trim().max(300).default(""),tableToken:tokenSchema.optional(),couponCode:z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{0,32}$/).default(""),lines:z.array(z.object({id:z.string().min(1).max(80),variant:z.enum(["full","half"]),addon:z.boolean(),quantity:z.number().int().min(1).max(20)})).min(1).max(30)});
 export class OrderError extends Error{constructor(message:string,public status=400){super(message)}}
 export async function getCatalog(verifiedTableRestaurantId?:string):Promise<{items:CatalogItem[];enabled:boolean}>{
  const r=verifiedTableRestaurantId?(await allowedRestaurant(verifiedTableRestaurantId)?{id:verifiedTableRestaurantId}:null):await orderingRestaurant();
@@ -20,8 +21,8 @@ export async function getCatalog(verifiedTableRestaurantId?:string):Promise<{ite
 export async function createDemoOrder(raw:unknown){
  if(!process.env.DATABASE_URL)throw new OrderError("Demo ordering is not enabled.",503);
  const parsed=orderInput.safeParse(raw);if(!parsed.success)throw new OrderError("Invalid order details");
- const {token,lines,kind,instructions,tableToken}=parsed.data;
- const key=tokenHash(token),requestHash=tokenHash(JSON.stringify({lines,kind,instructions,tableToken}));
+ const {token,lines,kind,instructions,tableToken,couponCode}=parsed.data;
+ const key=tokenHash(token),requestHash=tokenHash(JSON.stringify({lines,kind,instructions,tableToken,couponCode}));
  const table=tableToken?await tableContext(tableToken):null;
  if(tableToken&&!table)throw new OrderError("Table session expired",409);
  const r=table?{id:table.restaurantId}:await orderingRestaurant();if(!r)throw new OrderError("Demo restaurant unavailable",503);
@@ -35,10 +36,22 @@ export async function createDemoOrder(raw:unknown){
   if(tableToken){if(kind!=="dine_in")throw new OrderError("Table orders must be dine-in");const [session]=await tx.select({id:tableSessions.id}).from(tableSessions).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId),eq(restaurantTables.active,true))).where(and(eq(tableSessions.restaurantId,r.id),eq(tableSessions.tokenHash,tokenHash(tableToken)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");if(!session)throw new OrderError("Table session expired",409);tableSessionId=session.id;}
   const items=await tx.select().from(menuItems).where(and(eq(menuItems.restaurantId,r.id),inArray(menuItems.id,lines.map(l=>l.id)))).for("share");
   const snapshots=lines.map(l=>{const d=items.find(i=>i.id===l.id);if(!d?.available)throw new OrderError("A dish is unavailable",409);let unitPaise:number;try{unitPaise=unitPrice(d,l.variant,l.addon)}catch{throw new OrderError("Invalid dish options")}return {restaurantId:r.id,menuId:d.id,name:d.name,variant:l.variant,addon:l.addon,quantity:l.quantity,unitPaise};});
-  const totalPaise=snapshots.reduce((sum,l)=>sum+l.unitPaise*l.quantity,0);
-  if(totalPaise>10000000)throw new OrderError("Order exceeds demo limit");
-  const [order]=await tx.insert(orders).values({restaurantId:r.id,trackingHash:key,requestHash,kind,instructions,tableSessionId,subtotalPaise:totalPaise,totalPaise}).onConflictDoNothing({target:orders.trackingHash}).returning({id:orders.id,totalPaise:orders.totalPaise});
+  const subtotalPaise=snapshots.reduce((sum,l)=>sum+l.unitPaise*l.quantity,0);
+  if(subtotalPaise>10000000)throw new OrderError("Order exceeds demo limit");
+  const [settings]=await tx.select({tax:restaurantSettings.demoTaxBps}).from(restaurantSettings).where(eq(restaurantSettings.restaurantId,r.id)).limit(1);
+  let eligiblePaise=0,bps=0,cap:number|null=null;
+  if(couponCode){const [coupon]=await tx.select().from(coupons).where(and(eq(coupons.restaurantId,r.id),eq(coupons.code,couponCode),eq(coupons.active,true),gt(coupons.expiresAt,new Date()))).for("update");
+   if(!coupon||subtotalPaise<coupon.minimumPaise)throw new OrderError("Coupon unavailable or minimum subtotal not reached",409);
+   const [usage]=await tx.select({n:sql<number>`count(*)::int`}).from(couponUsages).where(and(eq(couponUsages.restaurantId,r.id),eq(couponUsages.code,couponCode)));
+   if(usage.n>=coupon.maximumUses)throw new OrderError("Coupon usage limit reached",409);
+   eligiblePaise=snapshots.filter(l=>!coupon.eligibleMenuId||l.menuId===coupon.eligibleMenuId).reduce((n,l)=>n+l.unitPaise*l.quantity,0);
+   if(!eligiblePaise)throw new OrderError("Coupon does not apply to these dishes",409);bps=coupon.percentBps;cap=coupon.maximumDiscountPaise;
+  }
+  const pricing=priceOrder(subtotalPaise,eligiblePaise,bps,cap,settings?.tax??0);
+  if(couponCode&&!pricing.discountPaise)throw new OrderError("Coupon discount is zero",409);
+  const [order]=await tx.insert(orders).values({restaurantId:r.id,trackingHash:key,requestHash,kind,instructions,tableSessionId,...pricing,couponCode:couponCode||null}).onConflictDoNothing({target:orders.trackingHash}).returning({id:orders.id,totalPaise:orders.totalPaise});
   if(!order){const [prior]=await tx.select().from(orders).where(eq(orders.trackingHash,key));if(!prior||prior.requestHash!==requestHash||prior.restaurantId!==r.id)throw new OrderError("Order key already used",409);return {id:prior.id,totalPaise:prior.totalPaise,reused:true};}
+  if(couponCode)await tx.insert(couponUsages).values({restaurantId:r.id,orderId:order.id,code:couponCode,discountPaise:pricing.discountPaise});
   await tx.insert(orderItems).values(snapshots.map(l=>({...l,orderId:order.id})));
   await tx.insert(orderStatusHistory).values({restaurantId:r.id,orderId:order.id,status:"pending"});
   return {...order,reused:false};
@@ -47,11 +60,11 @@ export async function createDemoOrder(raw:unknown){
 export async function trackDemoOrder(token:string){
  if(!tokenSchema.safeParse(token).success||!process.env.DATABASE_URL)return null;
  const db=database();
- const [order]=await db.select({id:orders.id,status:orders.status,kind:orders.kind,totalPaise:orders.totalPaise,createdAt:orders.createdAt,restaurantId:orders.restaurantId}).from(orders).innerJoin(restaurants,and(eq(restaurants.id,orders.restaurantId),eq(restaurants.demo,true))).where(eq(orders.trackingHash,tokenHash(token))).limit(1);
+ const [order]=await db.select({id:orders.id,status:orders.status,kind:orders.kind,totalPaise:orders.totalPaise,subtotalPaise:orders.subtotalPaise,discountPaise:orders.discountPaise,taxPaise:orders.taxPaise,couponCode:orders.couponCode,createdAt:orders.createdAt,restaurantId:orders.restaurantId}).from(orders).innerJoin(restaurants,and(eq(restaurants.id,orders.restaurantId),eq(restaurants.demo,true))).where(eq(orders.trackingHash,tokenHash(token))).limit(1);
  if(!order||!await allowedRestaurant(order.restaurantId))return null;
  const items=await db.select({name:orderItems.name,quantity:orderItems.quantity,variant:orderItems.variant,addon:orderItems.addon,unitPaise:orderItems.unitPaise}).from(orderItems).where(and(eq(orderItems.restaurantId,order.restaurantId),eq(orderItems.orderId,order.id)));
  const history=await db.select({status:orderStatusHistory.status,createdAt:orderStatusHistory.createdAt}).from(orderStatusHistory).where(and(eq(orderStatusHistory.restaurantId,order.restaurantId),eq(orderStatusHistory.orderId,order.id))).orderBy(desc(orderStatusHistory.createdAt));
- return {id:order.id,status:order.status,kind:order.kind,totalPaise:order.totalPaise,createdAt:order.createdAt,items,history};
+ return {id:order.id,status:order.status,kind:order.kind,totalPaise:order.totalPaise,subtotalPaise:order.subtotalPaise,discountPaise:order.discountPaise,taxPaise:order.taxPaise,couponCode:order.couponCode,createdAt:order.createdAt,items,history};
 }
 export async function staffOrders(restaurantId:string,waiterId?:string){
  const db=database();

@@ -13,8 +13,8 @@ export async function generateInvoice(restaurantId:string,orderId:string){
   const [prior]=await tx.select({id:invoiceOrders.invoiceId}).from(invoiceOrders).where(and(eq(invoiceOrders.restaurantId,restaurantId),eq(invoiceOrders.orderId,orderId)));if(prior)return prior.id;
   if(rows.some(r=>r.status!=="completed"&&r.status!=="cancelled"))throw new OrderError("Complete all orders before invoicing");
   const included=rows.filter(r=>r.status==="completed");if(!included.some(r=>r.id===orderId))throw new OrderError("Only completed orders can be invoiced");
-  const subtotalPaise=included.reduce((n,o)=>n+o.totalPaise,0);if(subtotalPaise>2147483647)throw new OrderError("Invoice total too large");
-  const [invoice]=await tx.insert(invoices).values({restaurantId,tableSessionId:initial.tableSessionId,subtotalPaise,totalPaise:subtotalPaise}).returning({id:invoices.id});
+  const subtotalPaise=included.reduce((n,o)=>n+o.subtotalPaise,0),discountPaise=included.reduce((n,o)=>n+o.discountPaise,0),taxPaise=included.reduce((n,o)=>n+o.taxPaise,0),totalPaise=included.reduce((n,o)=>n+o.totalPaise,0);if(Math.max(subtotalPaise,discountPaise,taxPaise,totalPaise)>2147483647)throw new OrderError("Invoice total too large");
+  const [invoice]=await tx.insert(invoices).values({restaurantId,tableSessionId:initial.tableSessionId,subtotalPaise,discountPaise,taxPaise,totalPaise}).returning({id:invoices.id});
   await tx.insert(invoiceOrders).values(included.map(o=>({restaurantId,invoiceId:invoice.id,orderId:o.id})));
   return invoice.id;
  });
@@ -32,7 +32,7 @@ export async function listBilling(restaurantId:string){
  return {rows,pending};
 }
 export async function invoiceDetails(restaurantId:string,id:string){
- const db=database();const [invoice]=await db.select({id:invoices.id,totalPaise:invoices.totalPaise,subtotalPaise:invoices.subtotalPaise,createdAt:invoices.createdAt,method:payments.method}).from(invoices).leftJoin(payments,and(eq(payments.restaurantId,invoices.restaurantId),eq(payments.invoiceId,invoices.id))).where(and(eq(invoices.restaurantId,restaurantId),eq(invoices.id,id)));
+ const db=database();const [invoice]=await db.select({id:invoices.id,totalPaise:invoices.totalPaise,subtotalPaise:invoices.subtotalPaise,discountPaise:invoices.discountPaise,taxPaise:invoices.taxPaise,createdAt:invoices.createdAt,method:payments.method}).from(invoices).leftJoin(payments,and(eq(payments.restaurantId,invoices.restaurantId),eq(payments.invoiceId,invoices.id))).where(and(eq(invoices.restaurantId,restaurantId),eq(invoices.id,id)));
  if(!invoice)return null;
  const included=await db.select({id:invoiceOrders.orderId}).from(invoiceOrders).where(and(eq(invoiceOrders.restaurantId,restaurantId),eq(invoiceOrders.invoiceId,id)));
  const items=included.length?await db.select({id:orderItems.id,name:orderItems.name,quantity:orderItems.quantity,variant:orderItems.variant,addon:orderItems.addon,unitPaise:orderItems.unitPaise}).from(orderItems).where(and(eq(orderItems.restaurantId,restaurantId),inArray(orderItems.orderId,included.map(o=>o.id)))):[];
