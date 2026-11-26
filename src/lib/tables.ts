@@ -17,7 +17,7 @@ export async function openTable(restaurantId:string,tableId:string,waiterId:stri
  await db.transaction(async tx=>{
   const [r]=await tx.select().from(restaurants).where(and(eq(restaurants.id,restaurantId),eq(restaurants.demo,true)));
   if(!r)throw new OrderError("Demo restaurant only");
-  const [table]=await tx.select().from(restaurantTables).where(and(eq(restaurantTables.restaurantId,restaurantId),eq(restaurantTables.id,tableId),eq(restaurantTables.active,true))).for("update");
+  const [table]=await tx.select().from(restaurantTables).where(and(eq(restaurantTables.restaurantId,restaurantId),eq(restaurantTables.id,tableId),eq(restaurantTables.active,true),eq(restaurantTables.cleaning,false))).for("update");
   if(!table)throw new OrderError("Table unavailable");
   const [existing]=await tx.select().from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.tableId,tableId),isNull(tableSessions.closedAt)));
   if(existing)throw new OrderError("Close the existing session first",409);
@@ -53,4 +53,17 @@ export async function finishRequest(restaurantId:string,id:string,waiterId?:stri
  const [r]=await db.select({id:waiterRequests.id}).from(waiterRequests).innerJoin(tableSessions,and(eq(tableSessions.restaurantId,waiterRequests.restaurantId),eq(tableSessions.id,waiterRequests.sessionId))).where(and(eq(waiterRequests.restaurantId,restaurantId),eq(waiterRequests.id,id),isNull(waiterRequests.completedAt),isNull(tableSessions.closedAt),waiterId?eq(tableSessions.waiterUserId,waiterId):undefined));
  if(!r)throw new OrderError("Request not available");
  await db.update(waiterRequests).set({completedAt:new Date()}).where(and(eq(waiterRequests.restaurantId,restaurantId),eq(waiterRequests.id,id),isNull(waiterRequests.completedAt)));
+}
+
+export async function setTableAvailability(restaurantId:string,id:string,floor:string,capacity:number,state:"available"|"cleaning"|"disabled"){
+ await database().transaction(async tx=>{
+  const [t]=await tx.select().from(restaurantTables).where(and(eq(restaurantTables.restaurantId,restaurantId),eq(restaurantTables.id,id))).for("update");if(!t)throw new OrderError("Table not found");
+  const [s]=await tx.select({id:tableSessions.id}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.tableId,id),isNull(tableSessions.closedAt)));if(s)throw new OrderError("Close the session before editing table availability");
+  await tx.update(restaurantTables).set({floor,capacity,active:state!=="disabled",cleaning:state==="cleaning"}).where(and(eq(restaurantTables.restaurantId,restaurantId),eq(restaurantTables.id,id)));
+ });
+}
+export async function rotateTableToken(restaurantId:string,id:string){
+ const token=newToken();
+ const changed=await database().update(tableSessions).set({tokenHash:tokenHash(token)}).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).returning({id:tableSessions.id});
+ if(!changed.length)throw new OrderError("Session expired or closed");return token;
 }

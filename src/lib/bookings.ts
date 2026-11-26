@@ -4,6 +4,7 @@ import {database} from "@/lib/db";
 import {reservations,eventBookings,restaurantTables} from "@/lib/db/schema";
 import {tokenHash} from "@/lib/domain/auth";
 import {orderingRestaurant,lockDemoWrite} from "@/lib/demo-context";
+import {allowedBookingTransition,type BookingStatus} from "@/lib/domain/booking";
 import {OrderError} from "@/lib/ordering";
 export const bookingInput=z.object({token:z.string().regex(/^[a-f0-9]{64}$/),event:z.boolean(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),time:z.enum(["12:00","13:00","14:00","15:00","17:00","18:00","19:00","20:00","21:00","22:00"]),guests:z.number().int().min(1).max(100),occasion:z.enum(["Casual dining","Birthday","Anniversary","Family gathering","Corporate party","Private dining","Other"]),budgetPaise:z.number().int().min(0).max(100000000).optional()});
 export async function createBooking(raw:unknown){
@@ -28,8 +29,10 @@ export async function confirmReservation(restaurantId:string,id:string,tableId:s
   await tx.update(reservations).set({tableId,status:"confirmed"}).where(and(eq(reservations.restaurantId,restaurantId),eq(reservations.id,id)));
  });
 }
-export async function bookingStatus(restaurantId:string,id:string,event:boolean,status:"rejected"|"cancelled"|"confirmed"){
- const db=database();if(event){await db.update(eventBookings).set({status}).where(and(eq(eventBookings.restaurantId,restaurantId),eq(eventBookings.id,id),eq(eventBookings.status,"requested")));return}
- if(status==="confirmed")throw new OrderError("Assign a table first");
- await db.update(reservations).set({status}).where(and(eq(reservations.restaurantId,restaurantId),eq(reservations.id,id),inArray(reservations.status,["requested","confirmed"])));
+export async function bookingStatus(restaurantId:string,id:string,event:boolean,status:BookingStatus){
+ await database().transaction(async tx=>{
+ if(event){const [r]=await tx.select().from(eventBookings).where(and(eq(eventBookings.restaurantId,restaurantId),eq(eventBookings.id,id))).for("update");if(!r||!allowedBookingTransition(r.status,status,r.startsAt,true))throw new OrderError("Invalid event transition");await tx.update(eventBookings).set({status}).where(and(eq(eventBookings.restaurantId,restaurantId),eq(eventBookings.id,id)));return}
+ const [r]=await tx.select().from(reservations).where(and(eq(reservations.restaurantId,restaurantId),eq(reservations.id,id))).for("update");if(!r||!allowedBookingTransition(r.status,status,r.startsAt,false))throw new OrderError("Invalid reservation transition");
+ await tx.update(reservations).set({status}).where(and(eq(reservations.restaurantId,restaurantId),eq(reservations.id,id)));
+ });
 }
