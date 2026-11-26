@@ -1,5 +1,7 @@
 name: Verify database and authentication
 on:
+  push:
+    branches: [feature/phase-2-auth]
   pull_request:
     paths:
       - 'src/lib/**'

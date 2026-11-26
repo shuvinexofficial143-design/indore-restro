@@ -17,3 +17,5 @@
 .low-stock{color:#f3b08b;font-weight:700}.booking-form .check-inline{display:flex;align-items:center;gap:10px}.booking-form .check-inline input{width:20px;min-height:20px}.booking-card summary{cursor:pointer;color:var(--gold);padding:10px 0}.cart-line small{display:block;color:var(--muted)}
 
 .booking-form textarea{width:100%;min-height:100px;resize:vertical;background:#171512;border:1px solid #595045;color:var(--cream);padding:9px;font:inherit}
+
+.assistant-answer{border-top:1px solid var(--line);padding:16px 0}.assistant-answer p{margin-top:8px}.assistant-answer strong{color:var(--gold)}
