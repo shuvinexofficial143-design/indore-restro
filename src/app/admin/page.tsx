@@ -1,0 +1,4 @@
+import {requireArea} from "@/lib/session";
+import {logout} from "@/app/login/actions";
+export const dynamic="force-dynamic";
+export default async function Admin(){const session=await requireArea("admin");return <main id="main" className="shell section inner"><p className="eyebrow">OWNER WORKSPACE · {session.role.toUpperCase()}</p><h1>{session.restaurantName}</h1><p className="intro">Welcome, {session.name}. Your account is scoped to this restaurant.</p><div className="dish-grid">{["Live orders","Menu management","Tables & QR codes","Reservations","Billing","Sales reports"].map(name=><article className="booking-card" key={name}><h3>{name}</h3><p className="muted">Module pending development</p></article>)}</div><form action={logout} className="section"><button className="btn outline">Sign out</button></form></main>}

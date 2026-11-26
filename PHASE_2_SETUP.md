@@ -1,0 +1,6 @@
+# Phase 2 database and authentication
+Draft feature branch. No live database credentials or migration applied.
+Create a dedicated Neon project on the existing free plan. Set DATABASE_URL (pooled) and DATABASE_URL_UNPOOLED in a private local environment. Never commit credentials.
+Run npm install, npm run db:migrate, then set BOOTSTRAP_OWNER_EMAIL and BOOTSTRAP_OWNER_PASSWORD privately and run npm run db:seed. Remove bootstrap credentials immediately afterward. Seed refuses overwrites. Set DATABASE_URL on Vercel when project access is available.
+Login uses a custom database-backed opaque session rather than Auth.js; scrypt password hashes, random hashed session tokens, 8-hour expiry, HttpOnly SameSite cookies, DB-backed per-email throttling, active membership checks, role gates. Next server actions enforce origin checks. Single restaurant membership per identity in initial release. Add IP/global rate limiting, session cleanup, staff CRUD and audit in subsequent work; do not expose production login before review.
+Admin route requires owner/manager; staff area is a placeholder. No fake operational analytics. DB integration and end-to-end valid/invalid login, role and cross-tenant tests are required before marking Phase 2 verified.
