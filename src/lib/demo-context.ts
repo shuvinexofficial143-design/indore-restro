@@ -25,6 +25,8 @@ export async function allowedRestaurant(id:string){
 export async function orderingRestaurant(){
  if(!process.env.DATABASE_URL)return null;
  const isolated=await activeDemo();if(isolated)return {id:isolated.restaurantId};
+ // A stale isolated browser must not silently fall back to the shared tenant.
+ if((await cookies()).get(demoCookie))return null;
  if(process.env.ENABLE_DEMO_ORDERS!=="1")return null;
  const [r]=await database().select({id:restaurants.id}).from(restaurants).where(and(eq(restaurants.slug,"royal-table"),eq(restaurants.demo,true))).limit(1);return r??null;
 }

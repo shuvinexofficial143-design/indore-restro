@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: "Discover the sample menu, ambience and reservation experience of a fictional Indore restaurant by Shuvi 360.",
   robots: { index: false, follow: false },
 };
+export const dynamic="force-dynamic";
 export const viewport:Viewport={themeColor:"#171512"};
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const content=await publicContent();
