@@ -9,7 +9,7 @@ try{
  const [restaurant]=await db`select id from restaurants where slug='royal-table'`;
  assert.ok(restaurant.id);
  const [migration]=await db`select count(*)::int as n from schema_migrations`;
- assert.equal(migration.n,5);
+ assert.equal(migration.n,6);
  const password=process.env.BOOTSTRAP_OWNER_PASSWORD;
  const [staffUser]=await db`insert into users(email,name,password_hash) values('waiter@example.invalid','Test Waiter',${await hashPassword(password)}) returning id`;
  await db`insert into staff(restaurant_id,user_id,role) values(${restaurant.id},${staffUser.id},'waiter')`;

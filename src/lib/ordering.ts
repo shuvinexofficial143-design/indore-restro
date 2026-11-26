@@ -5,6 +5,7 @@ import {restaurants,menuItems,orders,orderItems,orderStatusHistory,tableSessions
 import {sampleCatalog,type CatalogItem} from "@/lib/catalog";
 import {unitPrice} from "@/lib/domain/cart";
 import {tokenHash} from "@/lib/domain/auth";
+import {consumeOrder} from "@/lib/inventory";
 import {canTransition,type OrderStatus} from "@/lib/domain/order";
 export const tokenSchema=z.string().regex(/^[a-f0-9]{64}$/);
 export const orderInput=z.object({token:tokenSchema,kind:z.enum(["dine_in","takeaway","delivery"]),instructions:z.string().trim().max(300).default(""),tableToken:tokenSchema.optional(),lines:z.array(z.object({id:z.string().min(1).max(80),variant:z.enum(["full","half"]),addon:z.boolean(),quantity:z.number().int().min(1).max(20)})).min(1).max(30)});
@@ -61,6 +62,7 @@ export async function transitionOrder(restaurantId:string,userId:string,id:strin
   if(!o||!canTransition(o.status,to,o.kind))throw new OrderError("Invalid order transition",409);
   if(waiterId){if(!o.tableSessionId)throw new OrderError("Forbidden",403);const [assigned]=await tx.select({id:tableSessions.id}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,o.tableSessionId),eq(tableSessions.waiterUserId,waiterId),isNull(tableSessions.closedAt)));if(!assigned)throw new OrderError("Forbidden",403);}
 
+  if(to==="completed")await consumeOrder(tx,restaurantId,id,userId);
   await tx.update(orders).set({status:to,updatedAt:new Date()}).where(and(eq(orders.restaurantId,restaurantId),eq(orders.id,id)));
   await tx.insert(orderStatusHistory).values({restaurantId,orderId:id,status:to,actorUserId:userId});
  });
