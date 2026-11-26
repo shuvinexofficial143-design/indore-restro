@@ -44,6 +44,7 @@ try{
  const w=await staff("waiter@example.invalid");await w.goto(origin+"/waiter");await w.getByRole("button",{name:"Mark request complete"}).click();await w.getByRole("button",{name:"served",exact:true}).click();
  await guest.getByRole("heading",{name:"served",exact:true}).waitFor({timeout:15000});
  await owner.reload();await owner.getByRole("button",{name:"completed",exact:true}).click();
+ await owner.getByRole("button",{name:"completed",exact:true}).waitFor({state:"hidden"});
  const [final]=await db`select status from orders where id=${order.id}`;assert.equal(final.status,"completed");
  console.log("PASS QR table customer cart, server price, idempotency, out-of-stock, invalid table, duplicate waiter request, owner→kitchen→waiter→tracking");
 }finally{await browser.close();await db.end()}

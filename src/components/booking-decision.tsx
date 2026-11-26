@@ -1,0 +1,4 @@
+"use client";
+import {useActionState} from "react";
+import {decideBooking} from "@/app/admin/reservations/actions";
+export default function Decision({id,event,tables}:{id:string;event:boolean;tables:{id:string;label:string;capacity:number}[]}){const [message,action,pending]=useActionState(decideBooking,"");return <form action={action} className="booking-form"><input type="hidden" name="id" value={id}/><input type="hidden" name="event" value={String(event)}/>{!event&&<label className="form-submit">Assign table<select name="tableId" defaultValue=""><option value="">Select table</option>{tables.map(t=><option key={t.id} value={t.id}>{t.label} · {t.capacity} seats</option>)}</select></label>}<button className="btn gold" name="status" value="confirmed" disabled={pending}>Confirm demo</button><button className="btn outline" name="status" value="rejected" disabled={pending}>Reject</button><p role="status" className="form-submit">{message}</p></form>}

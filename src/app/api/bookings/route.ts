@@ -1,0 +1,3 @@
+import {createBooking} from "@/lib/bookings";
+import {OrderError} from "@/lib/ordering";
+export async function POST(req:Request){if(req.headers.get("origin")!==new URL(req.url).origin)return Response.json({error:"Origin not allowed"},{status:403});if(!req.headers.get("content-type")?.includes("application/json"))return Response.json({error:"JSON required"},{status:415});try{const body=await req.text();if(body.length>4000)return Response.json({error:"Request too large"},{status:413});const data=await createBooking(JSON.parse(body));return Response.json(data,{status:201})}catch(e){return Response.json({error:e instanceof OrderError?e.message:"Invalid booking or service unavailable"},{status:e instanceof OrderError?e.status:400})}}

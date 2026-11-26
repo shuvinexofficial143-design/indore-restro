@@ -1,0 +1,6 @@
+import {requireArea} from "@/lib/session";
+import {listBookings} from "@/lib/bookings";
+import Decision from "@/components/booking-decision";
+import AutoRefresh from "@/components/auto-refresh";
+export const dynamic="force-dynamic";
+export default async function Reservations(){const s=await requireArea("admin");const data=await listBookings(s.restaurantId);return <main id="main" className="shell section inner"><p className="eyebrow">DEMO REQUESTS</p><h1>Reservations &amp; <em>events.</em></h1><AutoRefresh/><h2>Table reservations</h2><div className="dish-grid">{data.reservations.map(r=><article key={r.id} className="booking-card"><h3>{r.guests} guests · {r.occasion}</h3><p>{r.startsAt.toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})}</p><p>{r.status}</p>{r.status==="requested"&&<Decision id={r.id} event={false} tables={data.tables.filter(t=>t.capacity>=r.guests)}/>}</article>)}</div>{!data.reservations.length&&<p>No table requests.</p>}<h2>Event requests</h2><div className="dish-grid">{data.events.map(r=><article key={r.id} className="booking-card"><h3>{r.guests} guests · {r.occasion}</h3><p>{r.startsAt.toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})}</p><p>{r.status}</p>{r.status==="requested"&&<Decision id={r.id} event tables={[]}/>}</article>)}</div>{!data.events.length&&<p>No event enquiries.</p>}</main>}
