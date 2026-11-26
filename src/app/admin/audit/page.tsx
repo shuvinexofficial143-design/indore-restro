@@ -1,0 +1,5 @@
+import Link from "next/link";
+import {requireArea} from "@/lib/session";
+import {auditHistory} from "@/lib/audit";
+export const dynamic="force-dynamic";
+export default async function AuditPage(){const session=await requireArea("admin"),rows=await auditHistory(session.restaurantId);return <main id="main" className="shell section inner"><Link href="/admin" className="text-link">← Dashboard</Link><p className="eyebrow">ADMIN ACTIVITY</p><h1>Audit <em>history.</em></h1><p className="intro">Latest 100 recorded menu, staff, website and table changes. No passwords, QR secrets or payment credentials are stored here.</p><div className="dish-grid">{rows.map(r=><article className="booking-card" key={r.id}><p className="eyebrow">{r.action}</p><h3>{r.actor}</h3><p>{r.detail}</p><p className="muted small">{r.occurredAt.toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})} IST</p><p className="muted small">Reference: {r.target}</p></article>)}</div>{!rows.length&&<p>No recorded changes yet.</p>}</main>}

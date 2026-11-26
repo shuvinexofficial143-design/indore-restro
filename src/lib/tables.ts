@@ -1,8 +1,9 @@
-import {and,eq,gt,lt,isNull,desc,inArray,ne,sql} from "drizzle-orm";
+import {and,eq,gt,lt,isNull,desc,inArray,ne} from "drizzle-orm";
 import {database} from "@/lib/db";
-import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders,reservations} from "@/lib/db/schema";
+import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders,reservations,invoices} from "@/lib/db/schema";
 import {newToken,tokenHash} from "@/lib/domain/auth";
 import {tableContext,lockDemoWrite} from "@/lib/demo-context";
+import {audit} from "@/lib/audit";
 import {OrderError} from "@/lib/ordering";
 export async function getTable(token:string){return tableContext(token)}
 export async function listTables(restaurantId:string){
@@ -68,7 +69,7 @@ export async function rotateTableToken(restaurantId:string,id:string){
  if(!changed.length)throw new OrderError("Session expired or closed");return token;
 }
 
-export async function moveTableSession(restaurantId:string,id:string,targetId:string,waiterId:string|null){
+export async function moveTableSession(restaurantId:string,id:string,targetId:string,waiterId:string|null,actorUserId:string){
  const token=newToken();
  await database().transaction(async tx=>{
  if(!await lockDemoWrite(tx,restaurantId))throw new OrderError("Demo session expired");
@@ -77,8 +78,9 @@ export async function moveTableSession(restaurantId:string,id:string,targetId:st
  const [occupied]=await tx.select({id:tableSessions.id}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.tableId,targetId),ne(tableSessions.id,id),isNull(tableSessions.closedAt)));if(occupied)throw new OrderError("Target table occupied");
  const now=new Date();const [reservation]=await tx.select({id:reservations.id}).from(reservations).where(and(eq(reservations.restaurantId,restaurantId),eq(reservations.tableId,targetId),inArray(reservations.status,["confirmed","checked_in"]),lt(reservations.startsAt,new Date(now.getTime()+30*60000)),gt(reservations.endsAt,now)));if(targetId!==s.tableId&&reservation)throw new OrderError("Target table reserved");
  if(waiterId){const [w]=await tx.select({id:staff.userId}).from(staff).innerJoin(users,eq(staff.userId,users.id)).where(and(eq(staff.restaurantId,restaurantId),eq(staff.userId,waiterId),eq(staff.role,"waiter"),eq(staff.active,true),eq(users.active,true)));if(!w)throw new OrderError("Waiter unavailable");}
- const [billed]=await tx.execute(sql`select 1 from invoices where restaurant_id=${restaurantId} and table_session_id=${id} limit 1`);if(billed)throw new OrderError("Invoiced sessions cannot move");
+ const [billed]=await tx.select({id:invoices.id}).from(invoices).where(and(eq(invoices.restaurantId,restaurantId),eq(invoices.tableSessionId,id))).limit(1);if(billed)throw new OrderError("Invoiced sessions cannot move");
  await tx.update(tableSessions).set({tableId:targetId,waiterUserId:waiterId,tokenHash:tokenHash(token)}).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id)));
+ await audit(tx,restaurantId,actorUserId,"table.transferred",id,`Table ${s.tableId} → ${targetId}; waiter assignment updated`);
  });
  return token;
 }
