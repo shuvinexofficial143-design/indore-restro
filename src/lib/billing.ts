@@ -1,6 +1,6 @@
 import {and,eq,desc,inArray,isNull} from "drizzle-orm";
 import {database} from "@/lib/db";
-import {invoices,invoiceOrders,payments,orders,orderItems,tableSessions,restaurants} from "@/lib/db/schema";
+import {invoices,invoiceOrders,payments,orders,orderItems,tableSessions,restaurants,sandboxGatewayOrders} from "@/lib/db/schema";
 import {OrderError} from "@/lib/ordering";
 export async function generateInvoice(restaurantId:string,orderId:string){
  const db=database();
@@ -23,6 +23,7 @@ export async function recordDemoPayment(restaurantId:string,invoiceId:string,use
  await database().transaction(async tx=>{
   const [r]=await tx.select({demo:restaurants.demo}).from(restaurants).where(eq(restaurants.id,restaurantId));if(!r?.demo)throw new OrderError("Demo billing only");
   const [i]=await tx.select().from(invoices).where(and(eq(invoices.restaurantId,restaurantId),eq(invoices.id,invoiceId))).for("update");if(!i)throw new OrderError("Invoice not found");
+  const [gateway]=await tx.select({id:sandboxGatewayOrders.invoiceId}).from(sandboxGatewayOrders).where(and(eq(sandboxGatewayOrders.restaurantId,restaurantId),eq(sandboxGatewayOrders.invoiceId,invoiceId)));if(gateway)throw new OrderError("Sandbox checkout already started for this invoice");
   await tx.insert(payments).values({restaurantId,invoiceId,method,amountPaise:i.totalPaise,recordedBy:userId}).onConflictDoNothing({target:[payments.restaurantId,payments.invoiceId]});
  });
 }
