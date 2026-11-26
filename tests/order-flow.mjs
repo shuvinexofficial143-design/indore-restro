@@ -44,7 +44,7 @@ try{
  const [ingredient]=await db`insert into inventory_items(restaurant_id,name,unit,stock,reorder_level) values(${r.id},'Test Paneer','g',1000,100) returning id`;
  await db`insert into recipes(restaurant_id,menu_id,inventory_id,full_amount,half_amount,addon_amount) values(${r.id},'paneer',${ingredient.id},150,75,0)`;
  const owner=await staff(process.env.BOOTSTRAP_OWNER_EMAIL);await owner.goto(origin+"/admin/orders");await owner.getByRole("button",{name:"accepted",exact:true}).click();
- const k=await staff("kitchen@example.invalid");await k.goto(origin+"/kitchen");await k.getByRole("button",{name:"preparing",exact:true}).click();await k.getByRole("button",{name:"ready",exact:true}).click();
+ const k=await staff("kitchen@example.invalid");await k.goto(origin+"/kitchen");await k.getByRole("button",{name:"preparing",exact:true}).click();await k.getByRole("button",{name:"Mark Paneer Butter Masala ready"}).click();await k.getByRole("button",{name:"Mark Paneer Butter Masala ready"}).waitFor({state:"hidden"});const [line]=await db`select ready_at from order_items where restaurant_id=${r.id} and order_id=${order.id}`;assert.ok(line.ready_at);await k.getByRole("button",{name:"ready",exact:true}).click();
  const w=await staff("waiter@example.invalid");await w.goto(origin+"/waiter");await w.getByRole("button",{name:"Mark request complete"}).click();await w.getByRole("button",{name:"served",exact:true}).click();
  await guest.getByRole("heading",{name:"served",exact:true}).waitFor({timeout:15000});
  await owner.reload();await owner.getByRole("button",{name:"completed",exact:true}).click();
