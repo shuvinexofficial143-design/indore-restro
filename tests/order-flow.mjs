@@ -48,3 +48,4 @@ try{
  const [final]=await db`select status from orders where id=${order.id}`;assert.equal(final.status,"completed");
  console.log("PASS QR table customer cart, server price, idempotency, out-of-stock, invalid table, duplicate waiter request, owner→kitchen→waiter→tracking");
 }finally{await browser.close();await db.end()}
+

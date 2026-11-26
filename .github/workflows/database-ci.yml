@@ -59,4 +59,4 @@ jobs:
             if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then break; fi
             sleep 1
           done
-          (node --experimental-strip-types tests/database-browser.mjs && node --experimental-strip-types tests/order-flow.mjs) || { cat /tmp/royal-db-test.log; exit 1; }
+          (node --experimental-strip-types tests/database-browser.mjs && node --experimental-strip-types tests/order-flow.mjs && node --experimental-strip-types tests/billing-bookings.mjs) || { cat /tmp/royal-db-test.log; exit 1; }
