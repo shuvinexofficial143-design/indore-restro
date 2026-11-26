@@ -1,21 +1,7 @@
 # Development status
 Updated: 2026-11-26
-Current phase: 0 — foundation implemented and verified; next phase 1.
-
-## Completed
-- GitHub main initialized; Next.js App Router, React, TypeScript, Tailwind, ESLint, branded development preview and health route.
-- Environment template without secrets, condensed project spec, database schema plan (Drizzle/Neon), domain order transitions and integer paise helpers.
-- CI run 45809312810 on a07d14ac7884e30bb2f5951d7b441f738fda53a6: npm install, lint, all four unit tests, production build, typecheck, HTTP homepage/health smoke test passed.
-- Local dependency-free tests also passed; tested source blob hashes matched GitHub.
-
-## Pending / limitations
-- Commit the reviewed CI-generated package-lock.json before production for reproducibility; artifact npm-lockfile is available from the successful CI run.
-- Database not connected; migrations not applied (Phase 2).
-- Vercel deployment not created or verified (Phase 1).
-- No ordering, auth, reservations, payments, staff apps or functional restaurant UI yet. Browser visual/responsive QA not run.
-- Local npm registry DNS unavailable; CI provided remote build verification.
-- Exact commit history is in Git; this tracker does not embed its own SHA.
-
-## Next
-Phase 1: premium public website, responsive branding/navigation/menu preview/gallery/offers/contact/reservation interface, initial Vercel deployment, lockfile and browser verification.
-External credentials later: Neon/Auth secret in Phase 2; approved Cashfree sandbox and Meta/calling credentials only at relevant phases.
+Current phase: 1 — public site implementation; CI and deployment verification pending.
+Phase 0 verified in CI run 45809312810: lint, four unit tests, build, typecheck, HTTP smoke.
+Phase 1 source: premium responsive home, sample menu with ten dishes and working search/category/veg filters, reservation/event local previews (not submitted), gallery, concept offer, footer, photo credits and mobile navigation. Licensed illustrative Unsplash photography via Next Image optimization. No fake reviews, phone numbers, bookings or orders.
+Pending: CI, Vercel deployment, browser QA, package lockfile, genuine owner-configured contact/location/branding, order and reservation backend at planned phases. Neon and auth Phase 2. Real orders/payment not implemented. No paid services activated.
+NEXT: finish Phase 1 verification; then Phase 2 Neon, ORM, migrations, authentication, roles and basic admin layout.

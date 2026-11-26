@@ -1,14 +1,15 @@
-import { restaurant } from "@/lib/restaurant";
+import Link from "next/link";
+import { ArrowUpRight, ArrowRight, ChefHat, Sparkles, CalendarDays, UtensilsCrossed, MapPin } from "lucide-react";
+import { DishCard, Photo } from "@/components/site";
+import { demoMenu, photos } from "@/lib/demo-menu";
 export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-dvh max-w-5xl flex-col justify-center px-6 py-16 sm:px-12">
-      <div className="border-y border-royal-gold/40 py-12">
-        <p className="mb-6 text-sm font-medium uppercase tracking-[0.25em] text-royal-gold">{restaurant.agency} · Development preview</p>
-        <h1 className="font-serif text-5xl leading-tight sm:text-7xl">{restaurant.name}</h1>
-        <p className="mt-5 max-w-xl text-lg leading-relaxed text-royal-cream/80">A fictional restaurant concept in Indore. The restaurant website, mobile ordering and staff management system are under development.</p>
-        <p className="mt-8 text-sm text-royal-gold">Phase 0 · Foundation only. No orders, bookings or payments are accepted yet.</p>
-      </div>
-      <footer className="mt-8 text-sm text-royal-cream/70">Powered by Shuvi 360 · Demonstration project</footer>
-    </main>
-  );
+ return <main id="main">
+  <section className="hero shell"><div className="hero-copy"><div className="eyebrow"><span/> A TASTE OF INDIA · INDORE</div><h1>Good food.<br/> <em>Grand moments.</em></h1><p>Rediscover the warmth of Indian hospitality, rich regional flavours and beautifully considered dining.</p><div className="actions"><Link href="/menu" className="btn gold">Explore our menu <ArrowRight size={18}/></Link><Link href="/reserve" className="btn outline">Book a table <ArrowUpRight size={18}/></Link></div><div className="hero-note"><span><ChefHat size={18}/> Chef-led concept</span><span><MapPin size={18}/> Indore, India</span></div></div><div className="hero-visual"><Photo src={photos.hero} alt="Rich Indian curry with rice and spices" priority sizes="(max-width: 750px) 100vw, 50vw"/><div className="hero-badge"><span>THE ART OF</span><strong>Indian dining</strong><span>ILLUSTRATIVE PHOTOGRAPHY</span></div></div></section>
+  <div className="feature-band"><div className="shell feature-grid"><span><ChefHat/> Thoughtfully crafted</span><span><UtensilsCrossed/> Indian classics</span><span><Sparkles/> Elegant atmosphere</span><span><CalendarDays/> Special occasions</span></div></div>
+  <section className="shell section" id="menu"><div className="section-head"><div><p className="eyebrow">FROM OUR DEMO KITCHEN</p><h2>Signature <em>flavours.</em></h2><p>Discover a selection of our concept menu.</p></div><Link className="text-link" href="/menu">View full sample menu <ArrowRight size={18}/></Link></div><div className="dish-grid">{demoMenu.slice(0,3).map(dish=><DishCard key={dish.id} dish={dish}/>)}</div></section>
+  <section className="shell section experience" id="experience"><div className="experience-img"><Photo src={photos.interior} alt="Illustrative warm contemporary restaurant interior" sizes="(max-width: 750px) 100vw, 48vw"/><span className="image-label">Concept ambience · reference photo</span></div><div className="experience-copy"><p className="eyebrow">OUR EXPERIENCE</p><h2>More than<br/> <em>a meal.</em></h2><p>From relaxed family lunches to intimate celebrations, imagine a space where warm lighting, thoughtful service and remarkable food come together.</p><Link className="btn outline" href="/events">Explore private dining <ArrowUpRight size={18}/></Link></div></section>
+  <section className="shell section"><div className="offer"><div><p className="eyebrow">SAMPLE OFFER · NOT REDEEMABLE</p><h2>A little more <em>to celebrate.</em></h2><p>Concept weekday dining offer: 10% off food for a table of four. This illustrates an editable restaurant promotion.</p></div><Link href="/reserve" className="btn gold">Preview reservation <ArrowUpRight size={18}/></Link></div></section>
+  <section className="shell section"><div className="section-head"><div><p className="eyebrow">GALLERY · INSPIRATION</p><h2>A feast for <em>the eyes.</em></h2></div></div><div className="gallery">{[{src:photos.interior,alt:"Dining ambience inspiration"},{src:photos.paneer,alt:"Paneer butter masala"},{src:photos.chicken,alt:"Chicken tikka masala"}].map(p=><div key={p.src}><Photo {...p}/></div>)}</div></section>
+  <section className="shell section final-cta"><p className="eyebrow">YOUR TABLE AWAITS</p><h2>Make it <em>memorable.</em></h2><p>Explore the reservation interface. No real bookings are accepted in this preview.</p><Link className="btn gold" href="/reserve">Reserve a table <ArrowUpRight size={18}/></Link><p className="muted small">Customer review module: coming when genuine, approved feedback is available.</p></section>
+ </main>
 }
