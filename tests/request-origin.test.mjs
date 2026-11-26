@@ -1,0 +1,3 @@
+import test from "node:test";import assert from "node:assert/strict";import {sameOrigin} from "../src/lib/request-origin.ts";
+test("browser origin matches actual host rather than internal URL",()=>{const req=new Request("http://localhost:3000/api/orders",{headers:{origin:"http://127.0.0.1:3000",host:"127.0.0.1:3000"}});assert.equal(sameOrigin(req),true)});
+test("foreign and missing origins rejected",()=>{assert.equal(sameOrigin(new Request("https://internal/api",{headers:{origin:"https://evil.example",host:"demo.example"}})),false);assert.equal(sameOrigin(new Request("https://internal/api",{headers:{host:"demo.example"}})),false)});

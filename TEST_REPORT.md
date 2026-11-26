@@ -1,4 +1,8 @@
 # Test report — 2026-11-26
-Phase 0: verified CI 45809312810.
-Phase 1: final CI 45815965901 passed all automated checks, including browser interactions and no horizontal overflow at 375, 390, 430, 768, 1440 px. Verified dependency lockfile committed to main. No independent visual image QA or Vercel deployment.
-Phase 2: isolated PostgreSQL 17 CI 45815915339 passed migration, repeat migration, bootstrap seed and production build, then failed browser invalid-login assertion. Fix commit 795cd45 pending CI 45816433911 (database/auth) and 45816433935 (application). No live Neon test, no production login claim.
+## Confirmed successful checkpoints
+- Core full integration c198f9f: application 45823050806 and PostgreSQL 45823050698.
+- Cashfree sandbox foundation 1487dc0: application 45823531608 and PostgreSQL 45823531540; no live gateway calls.
+- Extended customer/admin features c5d3fa4: application [45824890432](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45824890432), database [45824890524](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45824890524). Includes repeated migrations, authentication/roles, QR checkout/order idempotency, waiter requests, order transitions/stock deduction, invoice/demo payment, reservation conflict, tenant isolation, coupon/tax and customer accounts/feedback, admin menu/supplier/website/report/QR rotation.
+- ce2abfd application [45825289106](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825289106) passed. Database [45825288973](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825288973) failed after six scripts passed because a browser selector matched both the menu bulk control and the dish editor.
+## Latest expanded tests
+0388b036d28dc09ba5a6a90af889b303099abcc3: corrected menu selectors and added transfer, manual order, audit and kitchen item-readiness browser coverage. See [application](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825788757) and [database](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825788744). Do not claim success before completed results. The latest source has 15 SQL migrations; no actual Neon database or production deployment has been verified.

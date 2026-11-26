@@ -17,4 +17,4 @@ export const demoMenu = [
   { id: "kebab", name: "Chicken Seekh Kebab", category: "Starters", price: 299, veg: false, description: "Minced chicken, herbs and roasted spices." },
   { id: "phirni", name: "Rose Phirni", category: "Desserts", price: 149, veg: true, description: "Creamy rice pudding with a delicate rose finish." },
 ] as const;
-export type Dish = typeof demoMenu[number];
+export type Dish = {id:string;name:string;category:string;price:number;veg:boolean;description:string;image?:string;available?:boolean};

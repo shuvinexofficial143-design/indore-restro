@@ -1,8 +1,18 @@
-# Development status
-Updated: 2026-11-26
-Current phase: 1 — automated website verification complete; Vercel deployment blocked. Phase 2 draft in progress.
-Phase 0: verified CI 45809312810.
-Phase 1: premium responsive home, sample menu and search/category/veg filters, reservation and event previews, gallery, offer, mobile navigation and credits. CI 45815965901 passed dependency install, lint, four unit tests, production build, typecheck, HTTP smoke, browser verification at 375/390/430/768/1440px (five routes, no horizontal overflow, menu interaction and reservation preview). Lockfile committed by CI at 2ad63b8d557c77821a5aeb82e14bd10670ec1b36. Visual image rendering not independently checked.
-Vercel: no project found in Avanti Verse; creation previously refused with HTTP 403. No live URL. Owner must import repository or restore project creation access. No paid service activated.
-Phase 2: PR #1 feature/phase-2-auth. Migration and seed passed on isolated PostgreSQL 17 in CI 45815915339; production build passed, invalid password browser assertion failed. Revised login throttling query and browser assertion in commit 795cd45, also synced Phase 1 reservation label fix. Re-verification CI 45816433911 / 45816433935 pending. No merge, live Neon credentials or live database migrations. Neon discovery tools previously returned Tool not found.
-NEXT: verify Phase 2 CI, resolve any errors, connect dedicated Neon project and deploy after access restored. Phase 3 not started.
+# Development status — 2026-11-26
+Draft PR #1: feature/phase-2-auth. Main remains the stable website. No live deployment or production service.
+## Implemented on development branch
+- Public responsive website, managed menu, 44 sample dishes, reservations and events; database website editor.
+- PostgreSQL authentication, owner/manager/kitchen/waiter/cashier roles, isolated invite-only demos with expiry/revocation.
+- Customer account, fictional saved addresses, order history, favorites and consented private feedback; customer directory.
+- QR table ordering, server-side prices, idempotency, tracking, waiter/bill calls, manual counter order entry.
+- Kitchen item/order readiness, opt-in sound, elapsed time, waiter service; table floor/cleaning/status, QR regeneration, session transfer and waiter reassignment.
+- Combined invoices and receipt, fictional cash/UPI/card records, coupons/tax, reservation collision checks and lifecycle.
+- Stock and recipe consumption, suppliers, purchase costs, inventory history; menu bulk availability, sorting, specials.
+- Database reports with custom IST date ranges, order/table/reservation/inventory breakdown, CSV. Transactional audit records for selected admin actions.
+- PWA manifest/icons/offline fallback, deterministic menu assistant (not an external AI service).
+- Disabled-by-default Cashfree sandbox code; provider exercise is not verified.
+## Verification
+Core plus extended admin/customer integration passed at c5d3fa4: application https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45824890432 and database https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45824890524.
+Application checks passed for the subsequent item-ready and transfer/report code at ce2abfd: https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825289106. The first newer integration run reached six passed scripts then failed at an ambiguous menu-test selector. Corrected selectors and expanded transfer/manual-order/audit/item-ready tests at 0388b03. Fresh test status: see GitHub Actions; no claim that the newest changes have passed until results are recorded.
+## Still outstanding
+Neon live database access unavailable; Vercel project creation returned 403. Cashfree sandbox credentials, external provider exercise/refunds/reconciliation remain unverified; no real payments. Complete licensed dish photos, Hindi UI localization, expanded media/contact/social editor, reservation calendar and event requirement notes, external AI/messaging/calling, production security/accessibility/performance, compliance and deployment review are not fully delivered. Keep opt-in modes disabled until reviewed.

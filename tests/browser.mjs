@@ -6,7 +6,7 @@ try {
   const page=await browser.newPage({viewport:{width,height:900}});
   const errors=[];
   page.on("pageerror",error=>errors.push(error.message));
-  for(const path of ["/","/menu","/reserve","/events","/credits"]){
+  for(const path of ["/","/menu","/reserve","/events","/credits","/app","/demo","/assistant","/orders"]){
    const result=await page.goto("http://127.0.0.1:3000"+path,{waitUntil:"domcontentloaded"});
    assert.equal(result.status(),200,path);
    await page.locator("h1").waitFor();

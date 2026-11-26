@@ -1,0 +1,6 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {createHmac} from "node:crypto";
+import {merchantOrderId,rupeesToPaise,verifyPaidOrder,verifyWebhook,SANDBOX_API} from "../src/lib/domain/cashfree.ts";
+test("sandbox amount and identity matching",()=>{const id=merchantOrderId("12345678-1234-1234-1234-123456789abc");assert.equal(SANDBOX_API,"https://sandbox.cashfree.com/pg");assert.equal(rupeesToPaise(282.45),28245);assert.equal(rupeesToPaise(1.001),null);const order={order_id:id,order_amount:282.45,order_currency:"INR",order_status:"PAID"};assert.equal(verifyPaidOrder(order,id,28245),true);for(const invalid of [{order_amount:282.46},{order_currency:"USD"},{order_status:"ACTIVE"},{order_id:"other"}])assert.equal(verifyPaidOrder({...order,...invalid},id,28245),false)});
+test("webhook signature covers exact unparsed body and timestamp",()=>{const raw='{"amount":100.00}',ts="1795697000000",secret="mock-test-secret";const sig=createHmac("sha256",secret).update(ts+raw).digest("base64");assert.equal(verifyWebhook(raw,ts,sig,secret),true);assert.equal(verifyWebhook('{"amount":100}',ts,sig,secret),false);assert.equal(verifyWebhook(raw,ts,null,secret),false);assert.equal(verifyWebhook(raw,ts,sig,"other"),false)});

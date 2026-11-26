@@ -1,0 +1,6 @@
+import {requireArea} from "@/lib/session";
+import {ownerCustomers} from "@/lib/customer-crm";
+import {money} from "@/lib/catalog";
+import Link from "next/link";
+export const dynamic="force-dynamic";
+export default async function Customers(){const s=await requireArea("admin"),people=await ownerCustomers(s.restaurantId);return <main id="main" className="shell section inner"><Link href="/admin" className="text-link">← Dashboard</Link><p className="eyebrow">PRIVATE CUSTOMER DIRECTORY · FICTIONAL DATA ONLY</p><h1>Customer <em>relationships.</em></h1><p className="intro">Sample customer accounts, completed order value (not revenue) and consented private feedback. No public ratings are generated.</p><div className="dish-grid">{people.map(c=><article key={c.id} className="booking-card"><h3>{c.name}</h3><p>{c.email}</p><p>{c.orderCount} orders · {money(c.completedValue)} completed order value</p><details><summary>Private feedback ({c.feedback.length})</summary>{c.feedback.map(f=><div key={f.orderId}><p>{f.rating}/5 · Order #{f.orderId.slice(0,8)}</p><p>{f.comment||"No comment"}</p></div>)}{!c.feedback.length&&<p>No consented feedback.</p>}</details></article>)}</div>{!people.length&&<p>No demo customer accounts.</p>}</main>}

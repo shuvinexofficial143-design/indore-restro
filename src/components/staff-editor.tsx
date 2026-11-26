@@ -1,0 +1,4 @@
+"use client";
+import {useActionState} from "react";
+import {createStaff} from "@/app/admin/staff/actions";
+export default function StaffEditor(){const [state,action,pending]=useActionState(createStaff,"");return <form action={action} className="booking-card booking-form"><label>Name<input name="name" required maxLength={100}/></label><label>Email<input name="email" type="email" required/></label><label>Role<select name="role">{["manager","kitchen","waiter","cashier"].map(r=><option key={r}>{r}</option>)}</select></label><label>Initial password<input name="password" type="password" minLength={12} maxLength={128} required autoComplete="new-password"/></label><button className="btn gold form-submit" disabled={pending}>Create staff</button><p className="form-submit" role="status">{state}</p></form>}

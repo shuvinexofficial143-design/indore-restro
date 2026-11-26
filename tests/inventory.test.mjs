@@ -1,0 +1,3 @@
+import test from "node:test";import assert from "node:assert/strict";import {ingredientTotals} from "../src/lib/domain/inventory.ts";
+test("aggregates recipe variants and addons",()=>{assert.equal(ingredientTotals([{inventoryId:"paneer",fullAmount:150,halfAmount:75,addonAmount:10,variant:"half",addon:true,quantity:2},{inventoryId:"paneer",fullAmount:150,halfAmount:75,addonAmount:0,variant:"full",addon:false,quantity:1}]).get("paneer"),320)});
+test("rejects negative or overflowing quantities",()=>{assert.throws(()=>ingredientTotals([{inventoryId:"x",fullAmount:150,halfAmount:null,addonAmount:0,variant:"full",addon:false,quantity:-1}]))});
