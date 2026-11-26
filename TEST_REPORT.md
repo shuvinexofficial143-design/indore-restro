@@ -1,6 +1,8 @@
 # Test report — 2026-11-26
-Verified source c198f9f75eba86d0aa4cefd47a2e12e184343e5e:
-- Application CI 45823050806: SUCCESS — lint, unit tests, production build, typecheck, HTTP smoke and Chromium checks at 375/390/430/768/1440px.
-- Database CI 45823050698: SUCCESS — temporary PostgreSQL 17 with repeated migration execution, staff login/session security/role denial/disabled users, QR cart/idempotency/out-of-stock checks, owner→kitchen→waiter→tracking and inventory consumption, combined invoice/manual payment/receipt, reservation conflict, separate demo tenant/role/revocation, customer account/address/history/logout, coupon caps/usage/tax snapshot.
-- Gateway foundation and dynamic menu changes after this verified source: fresh CI required. No external Cashfree API or real payment tested.
-- No live Neon/Vercel deployment or exhaustive security/visual audit verified.
+## Confirmed successful checkpoints
+- Core full integration c198f9f: application 45823050806 and PostgreSQL 45823050698.
+- Cashfree sandbox foundation 1487dc0: application 45823531608 and PostgreSQL 45823531540; no live gateway calls.
+- Extended customer/admin features c5d3fa4: application [45824890432](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45824890432), database [45824890524](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45824890524). Includes repeated migrations, authentication/roles, QR checkout/order idempotency, waiter requests, order transitions/stock deduction, invoice/demo payment, reservation conflict, tenant isolation, coupon/tax and customer accounts/feedback, admin menu/supplier/website/report/QR rotation.
+- ce2abfd application [45825289106](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825289106) passed. Database [45825288973](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825288973) failed after six scripts passed because a browser selector matched both the menu bulk control and the dish editor.
+## Latest expanded tests
+0388b036d28dc09ba5a6a90af889b303099abcc3: corrected menu selectors and added transfer, manual order, audit and kitchen item-readiness browser coverage. See [application](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825788757) and [database](https://github.com/shuvinexofficial143-design/indore-restro/actions/runs/45825788744). Do not claim success before completed results. The latest source has 15 SQL migrations; no actual Neon database or production deployment has been verified.
