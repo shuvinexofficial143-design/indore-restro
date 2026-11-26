@@ -15,3 +15,5 @@
 @media print{body{background:#fff;color:#111}.site-header,.site-footer,.mobile-nav,.demo-strip,.skip,.no-print{display:none!important}.receipt,.receipt .booking-card{width:100%;margin:0;padding:0;border:none;background:#fff;color:#111}.receipt .cart-total,.receipt .eyebrow{color:#111}}
 
 .low-stock{color:#f3b08b;font-weight:700}.booking-form .check-inline{display:flex;align-items:center;gap:10px}.booking-form .check-inline input{width:20px;min-height:20px}.booking-card summary{cursor:pointer;color:var(--gold);padding:10px 0}.cart-line small{display:block;color:var(--muted)}
+
+.booking-form textarea{width:100%;min-height:100px;resize:vertical;background:#171512;border:1px solid #595045;color:var(--cream);padding:9px;font:inherit}

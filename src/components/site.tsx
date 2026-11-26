@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowUpRight, Crown, Clock3, MapPin, UtensilsCrossed } from "lucide-react";
+import type {defaultContent} from "@/lib/site-content";
 import type { Dish } from "@/lib/demo-menu";
 
 export function Brand() {
@@ -15,6 +16,6 @@ export function Photo({src,alt,priority=false,sizes="(max-width: 700px) 100vw, 3
 export function DishCard({dish}:{dish:Dish}) {
   return <article className="dish-card">{ "image" in dish ? <div className="dish-image"><Photo src={dish.image} alt={dish.name}/><span className="image-label">{dish.category}</span></div> : <div className="dish-symbol"><UtensilsCrossed size={27} strokeWidth={1.3}/><span>{dish.category}</span></div>}<div className="dish-body"><div className="dish-title"><h3>{dish.name}</h3><span>₹{dish.price}</span></div><p>{dish.description}</p><span className="diet"><i className={dish.veg?"veg":"nonveg"}/>{dish.veg?"Vegetarian":"Non-vegetarian"}</span></div></article>;
 }
-export function Footer(){
- return <footer id="contact" className="site-footer"><div className="shell footer-grid"><div><Brand/><p>Indian flavours, thoughtful hospitality and memorable moments. A fictional restaurant concept created by Shuvi 360.</p></div><div><h3>Explore</h3><Link href="/menu">Sample menu</Link><Link href="/reserve">Reservation preview</Link><Link href="/events">Private events</Link></div><div><h3>Visit concept</h3><p><MapPin size={16}/> Indore, Madhya Pradesh (demo)</p><p><Clock3 size={16}/> Sample hours: 12 PM – 11 PM</p><p>Phone, WhatsApp, Instagram and exact location will be configured by the restaurant owner.</p></div></div><div className="shell footer-bottom"><span>© 2026 The Royal Table · Demo only</span><Link href="/credits">Photography credits</Link><span>Designed by Shuvi 360</span></div></footer>
+export function Footer({content}:{content:typeof defaultContent}){
+ return <footer id="contact" className="site-footer"><div className="shell footer-grid"><div><Brand/><p>Indian flavours, thoughtful hospitality and memorable moments. A fictional restaurant concept created by Shuvi 360.</p></div><div><h3>Explore</h3><Link href="/menu">Sample menu</Link><Link href="/reserve">Reservation preview</Link><Link href="/events">Private events</Link><Link href="/demo">Explore demo</Link></div><div><h3>Visit concept</h3><p><MapPin size={16}/> {content.cityLabel}</p><p><Clock3 size={16}/> Sample hours: {content.openingHours}</p><p>Phone, WhatsApp, Instagram and exact location will be configured by the restaurant owner.</p></div></div><div className="shell footer-bottom"><span>© 2026 The Royal Table · Demo only</span><Link href="/credits">Photography credits</Link><span>Designed by Shuvi 360</span></div></footer>
 }
