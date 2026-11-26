@@ -31,6 +31,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      ENABLE_DEMO_ORDERS: '1'
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/royal_test
       DATABASE_URL_UNPOOLED: postgresql://postgres@127.0.0.1:5432/royal_test
     steps:
@@ -52,9 +53,10 @@ jobs:
           export BOOTSTRAP_OWNER_PASSWORD="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
           echo "::add-mask::$BOOTSTRAP_OWNER_PASSWORD"
           npm run db:seed
+          npm run db:seed-menu
           npm run start -- --port 3000 >/tmp/royal-db-test.log 2>&1 &
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then break; fi
             sleep 1
           done
-          node --experimental-strip-types tests/database-browser.mjs || { cat /tmp/royal-db-test.log; exit 1; }
+          (node --experimental-strip-types tests/database-browser.mjs && node --experimental-strip-types tests/order-flow.mjs) || { cat /tmp/royal-db-test.log; exit 1; }

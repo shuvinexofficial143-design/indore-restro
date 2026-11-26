@@ -1,0 +1,58 @@
+import {and,eq,gt,isNull,desc,inArray} from "drizzle-orm";
+import {database} from "@/lib/db";
+import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders} from "@/lib/db/schema";
+import {newToken,tokenHash} from "@/lib/domain/auth";
+import {OrderError} from "@/lib/ordering";
+export async function getTable(token:string){
+ if(!/^[a-f0-9]{64}$/.test(token)||!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")return null;
+ const [row]=await database().select({id:tableSessions.id,label:restaurantTables.label,expiresAt:tableSessions.expiresAt}).from(tableSessions).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId),eq(restaurantTables.active,true))).innerJoin(restaurants,and(eq(restaurants.id,tableSessions.restaurantId),eq(restaurants.slug,"royal-table"),eq(restaurants.demo,true))).where(and(eq(tableSessions.tokenHash,tokenHash(token)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).limit(1);
+ return row??null;
+}
+export async function listTables(restaurantId:string){
+ const db=database();
+ const tables=await db.select().from(restaurantTables).where(eq(restaurantTables.restaurantId,restaurantId)).orderBy(restaurantTables.label);
+ const sessions=await db.select({id:tableSessions.id,tableId:tableSessions.tableId,waiterUserId:tableSessions.waiterUserId,expiresAt:tableSessions.expiresAt}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),isNull(tableSessions.closedAt)));
+ const waiters=await db.select({id:staff.userId,name:users.name}).from(staff).innerJoin(users,eq(users.id,staff.userId)).where(and(eq(staff.restaurantId,restaurantId),eq(staff.role,"waiter"),eq(staff.active,true),eq(users.active,true)));
+ return {tables,sessions,waiters};
+}
+export async function openTable(restaurantId:string,tableId:string,waiterId:string|null){
+ const token=newToken(),db=database();
+ await db.transaction(async tx=>{
+  const [r]=await tx.select().from(restaurants).where(and(eq(restaurants.id,restaurantId),eq(restaurants.demo,true)));
+  if(!r)throw new OrderError("Demo restaurant only");
+  const [table]=await tx.select().from(restaurantTables).where(and(eq(restaurantTables.restaurantId,restaurantId),eq(restaurantTables.id,tableId),eq(restaurantTables.active,true))).for("update");
+  if(!table)throw new OrderError("Table unavailable");
+  const [existing]=await tx.select().from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.tableId,tableId),isNull(tableSessions.closedAt)));
+  if(existing)throw new OrderError("Close the existing session first",409);
+  if(waiterId){const [w]=await tx.select({id:staff.userId}).from(staff).innerJoin(users,eq(staff.userId,users.id)).where(and(eq(staff.restaurantId,restaurantId),eq(staff.userId,waiterId),eq(staff.role,"waiter"),eq(staff.active,true),eq(users.active,true)));if(!w)throw new OrderError("Invalid waiter")}
+  await tx.insert(tableSessions).values({restaurantId,tableId,tokenHash:tokenHash(token),waiterUserId:waiterId,expiresAt:new Date(Date.now()+8*60*60*1000)});
+ });
+ return token;
+}
+export async function closeTable(restaurantId:string,id:string){
+ await database().transaction(async tx=>{
+  const [session]=await tx.select().from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id),isNull(tableSessions.closedAt))).for("update");
+  if(!session)throw new OrderError("Session not found");
+  const [active]=await tx.select({id:orders.id}).from(orders).where(and(eq(orders.restaurantId,restaurantId),eq(orders.tableSessionId,id),inArray(orders.status,["pending","accepted","preparing","ready","served","out_for_delivery"]))).limit(1);
+  if(active)throw new OrderError("Complete or cancel all orders first");
+  await tx.update(tableSessions).set({closedAt:new Date()}).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,id)));
+  await tx.update(waiterRequests).set({completedAt:new Date()}).where(and(eq(waiterRequests.restaurantId,restaurantId),eq(waiterRequests.sessionId,id),isNull(waiterRequests.completedAt)));
+ });
+}
+export async function createTableRequest(token:string,kind:"waiter"|"bill"){
+ if(!process.env.DATABASE_URL||process.env.ENABLE_DEMO_ORDERS!=="1")throw new OrderError("Requests unavailable",503);
+ await database().transaction(async tx=>{
+  const [s]=await tx.select({id:tableSessions.id,restaurantId:tableSessions.restaurantId}).from(tableSessions).innerJoin(restaurants,and(eq(restaurants.id,tableSessions.restaurantId),eq(restaurants.demo,true),eq(restaurants.slug,"royal-table"))).where(and(eq(tableSessions.tokenHash,tokenHash(token)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");
+  if(!s)throw new OrderError("Session expired",404);
+  await tx.insert(waiterRequests).values({restaurantId:s.restaurantId,sessionId:s.id,kind}).onConflictDoNothing();
+ });
+}
+export async function staffRequests(restaurantId:string,waiterId?:string){
+ return database().select({id:waiterRequests.id,kind:waiterRequests.kind,table:restaurantTables.label,createdAt:waiterRequests.createdAt}).from(waiterRequests).innerJoin(tableSessions,and(eq(tableSessions.restaurantId,waiterRequests.restaurantId),eq(tableSessions.id,waiterRequests.sessionId))).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId))).where(and(eq(waiterRequests.restaurantId,restaurantId),isNull(waiterRequests.completedAt),isNull(tableSessions.closedAt),waiterId?eq(tableSessions.waiterUserId,waiterId):undefined)).orderBy(desc(waiterRequests.createdAt)).limit(100);
+}
+export async function finishRequest(restaurantId:string,id:string,waiterId?:string){
+ const db=database();
+ const [r]=await db.select({id:waiterRequests.id}).from(waiterRequests).innerJoin(tableSessions,and(eq(tableSessions.restaurantId,waiterRequests.restaurantId),eq(tableSessions.id,waiterRequests.sessionId))).where(and(eq(waiterRequests.restaurantId,restaurantId),eq(waiterRequests.id,id),isNull(waiterRequests.completedAt),isNull(tableSessions.closedAt),waiterId?eq(tableSessions.waiterUserId,waiterId):undefined));
+ if(!r)throw new OrderError("Request not available");
+ await db.update(waiterRequests).set({completedAt:new Date()}).where(and(eq(waiterRequests.restaurantId,restaurantId),eq(waiterRequests.id,id),isNull(waiterRequests.completedAt)));
+}

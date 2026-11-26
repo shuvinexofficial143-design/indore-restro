@@ -1,0 +1,10 @@
+"use client";
+import {useActionState,useEffect,useState} from "react";
+import {startTable,endTable} from "@/app/admin/tables/actions";
+import QRCode from "qrcode";
+export function TableOpen({id,waiters}:{id:string;waiters:{id:string;name:string}[]}){
+ const [state,action,pending]=useActionState(startTable,{});const [qr,setQr]=useState(""),[url,setUrl]=useState("");
+ useEffect(()=>{if(!state.token)return;let active=true;const link=window.location.origin+"/table/"+state.token;QRCode.toDataURL(link,{width:320,margin:2}).then(value=>{if(active){setQr(value);setUrl(link)}}).catch(()=>{});return()=>{active=false}},[state.token]);
+ return <><form action={action} className="booking-form"><input type="hidden" name="tableId" value={id}/><label className="form-submit">Assigned waiter<select name="waiterId" defaultValue=""><option value="">Unassigned (manager only)</option>{waiters.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label><button className="btn gold form-submit" disabled={pending}>{pending?"Starting…":"Start session & QR"}</button></form>{state.error&&<p role="alert">{state.error}</p>}{state.token&&<div className="booking-summary"><p>Session QR · expires after 8 hours. Save now; token is shown once.</p>{qr&&<><a href={qr} download="royal-table-qr.png"><span className="qr-preview" style={{backgroundImage:"url("+qr+")"}} role="img" aria-label="Table ordering QR code"/></a><a href={qr} download="royal-table-qr.png" className="btn outline">Download QR PNG</a></>}{url&&<a href={url} className="text-link" target="_blank" rel="noreferrer">Open table menu</a>}</div>}</>
+}
+export function TableClose({id}:{id:string}){const [state,action,pending]=useActionState(endTable,{});return <form action={action}><input type="hidden" name="id" value={id}/><button className="btn outline" disabled={pending}>Close session</button>{state.error&&<p role="alert">{state.error}</p>}</form>}
