@@ -1,0 +1,24 @@
+import {chromium} from "playwright";
+import postgres from "postgres";
+import assert from "node:assert/strict";
+const origin="http://127.0.0.1:3000",db=postgres(process.env.DATABASE_URL_UNPOOLED,{max:1}),browser=await chromium.launch();
+try{
+ const [r]=await db`select id from restaurants where slug='royal-table'`;
+ const page=await browser.newPage();
+ await page.goto(origin+"/login");await page.getByLabel("Staff email").fill(process.env.BOOTSTRAP_OWNER_EMAIL);await page.getByLabel("Password",{exact:true}).fill(process.env.BOOTSTRAP_OWNER_PASSWORD);await page.getByRole("button",{name:"Sign in",exact:true}).click();await page.waitForURL("**/admin");
+ await page.goto(origin+"/admin/menu");
+ const newDish=page.locator("details").filter({has:page.getByText("Add a new dish",{exact:true})});await newDish.locator("summary").click();
+ await newDish.getByLabel("Name",{exact:true}).fill("CI Sample Soup");await newDish.getByLabel("Category",{exact:true}).fill("Soups");await newDish.getByLabel("Description").fill("Fictional test soup");await newDish.getByLabel("Full price (₹)",{exact:true}).fill("123.45");await newDish.getByRole("button",{name:"Add dish"}).click();await page.getByText("CI Sample Soup · Available",{exact:true}).waitFor();
+ const [dish]=await db`select id,price_paise from menu_items where restaurant_id=${r.id} and name='CI Sample Soup'`;assert.equal(dish.price_paise,12345);
+ await page.goto(origin+"/menu");await page.getByRole("textbox",{name:"Search dishes"}).fill("CI Sample Soup");await page.getByRole("heading",{name:"CI Sample Soup"}).waitFor();
+ await page.goto(origin+"/admin/menu");const edit=page.locator("details").filter({has:page.getByText("CI Sample Soup · Available",{exact:true})});await edit.locator("summary").click();await edit.getByLabel("Available",{exact:true}).uncheck();await edit.getByRole("button",{name:"Save dish"}).click();await page.getByText("CI Sample Soup · Sold out",{exact:true}).waitFor();
+ await page.goto(origin+"/menu");await page.getByRole("textbox",{name:"Search dishes"}).fill("CI Sample Soup");await page.getByText("Currently unavailable",{exact:true}).waitFor();
+ await page.goto(origin+"/admin/inventory");const ingredient=page.locator("form").filter({has:page.getByRole("heading",{name:"Add ingredient",exact:true})});await ingredient.getByLabel("Name",{exact:true}).fill("CI Test Flour");await ingredient.getByLabel("Reorder level").fill("50");await ingredient.getByRole("button",{name:"Save create"}).click();await page.getByRole("heading",{name:"CI Test Flour",exact:true}).waitFor();
+ const [stock]=await db`select id from inventory_items where restaurant_id=${r.id} and name='CI Test Flour'`;
+ const movement=page.locator("form").filter({has:page.getByRole("heading",{name:"Purchase or waste"})});await movement.getByLabel("Ingredient").selectOption(stock.id);await movement.getByLabel("Quantity").fill("500");await movement.getByRole("button",{name:"Save movement"}).click();await page.getByText("500 g · threshold 50",{exact:true}).waitFor();
+ const recipe=page.locator("form").filter({has:page.getByRole("heading",{name:"Set recipe"})});await recipe.getByLabel("Ingredient").selectOption(stock.id);await recipe.getByLabel("Dish",{exact:true}).selectOption(dish.id);await recipe.getByLabel("Full portion").fill("100");await recipe.getByRole("button",{name:"Save recipe"}).click();await page.getByText("CI Sample Soup · CI Test Flour · full 100, half 100, addon 0",{exact:true}).waitFor();
+ await page.goto(origin+"/admin/website");await page.getByLabel("Hero heading").fill("CI Royal kitchen.");await page.getByRole("button",{name:"Save website"}).click();await page.getByText("Website content saved.",{exact:true}).waitFor();await page.goto(origin+"/");await page.getByRole("heading",{name:/CI Royal kitchen/}).waitFor();
+ await page.goto(origin+"/admin/reports");await page.getByRole("heading",{name:/Sales overview/}).waitFor();const report=await page.evaluate(async()=>{const r=await fetch("/admin/reports/export?period=today");return {status:r.status,body:await r.text()}});assert.equal(report.status,200);assert.match(report.body,/Demo payments/);
+ const other=await browser.newPage();assert.equal((await other.request.get(origin+"/admin/reports/export")).status(),403);await other.close();
+ console.log("PASS admin menu editing/public catalog, inventory purchase/recipe, website content and private CSV report");
+}finally{await browser.close();await db.end()}

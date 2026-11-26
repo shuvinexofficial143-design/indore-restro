@@ -14,5 +14,5 @@ export async function saveMenu(_state:string,form:FormData){const s=await requir
  const {id,...fields}=p;
  if(id){const rows=await database().update(menuItems).set(fields).where(and(eq(menuItems.restaurantId,s.restaurantId),eq(menuItems.id,id))).returning({id:menuItems.id});if(!rows.length)return "Menu item not found."}
  else await database().insert(menuItems).values({restaurantId:s.restaurantId,id:randomUUID(),...fields});
- for(const path of ["/admin/menu","/app"])revalidatePath(path);return "Saved.";
+ for(const path of ["/admin/menu","/app","/menu"])revalidatePath(path);return "Saved.";
  }catch{return "Unable to save. Check the fields and price limits."}}
