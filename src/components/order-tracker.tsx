@@ -1,0 +1,10 @@
+"use client";
+import {useEffect,useState} from "react";
+import Link from "next/link";
+import {money} from "@/lib/catalog";
+type Tracking={id:string;status:string;kind:string;totalPaise:number;items:{name:string;quantity:number;unitPaise:number}[];history:{status:string;createdAt:string}[]};
+export default function Tracker({token}:{token:string}){
+ const [data,setData]=useState<Tracking|null>(null),[error,setError]=useState("");
+ useEffect(()=>{let active=true;let timer:ReturnType<typeof setTimeout>;async function poll(){try{const r=await fetch("/api/orders/"+token,{cache:"no-store"});if(!r.ok)throw new Error(r.status===404?"Order not found":"Tracking unavailable");const value=await r.json();if(active){setData(value);setError("")}}catch(e){if(active)setError(e instanceof Error?e.message:"Tracking unavailable")}finally{if(active)timer=setTimeout(poll,5000)}}void poll();return()=>{active=false;clearTimeout(timer)}},[token]);
+ return <><p className="eyebrow">DEMO ORDER TRACKING</p><h1>Order <em>status.</em></h1>{error&&<p role="alert" className="intro">{error} · retrying</p>}{!data&&!error&&<p role="status">Loading order…</p>}{data&&<div className="booking-card"><p className="muted small">Order #{data.id.slice(0,8)} · {data.kind.replaceAll("_"," ")}</p><h2 className="tracking-status" role="status">{data.status.replaceAll("_"," ")}</h2><p className="muted">Fictional order. Keep this private tracking link.</p>{data.items.map((l,i)=><div className="cart-line" key={i}><span>{l.quantity} × {l.name}</span><strong>{money(l.unitPaise*l.quantity)}</strong></div>)}<div className="cart-total"><span>Total</span><strong>{money(data.totalPaise)}</strong></div><h3>Updates</h3>{data.history.map((h,i)=><p key={i}>{h.status.replaceAll("_"," ")} · {new Date(h.createdAt).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})}</p>)}</div>}<Link className="btn outline" href="/app">Back to menu</Link></>
+}

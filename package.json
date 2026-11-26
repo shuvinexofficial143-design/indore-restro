@@ -13,7 +13,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "lint": "eslint .",
     "db:migrate": "node --experimental-strip-types scripts/migrate.mjs",
-    "db:seed": "node --experimental-strip-types scripts/seed.mjs"
+    "db:seed": "node --experimental-strip-types scripts/seed.mjs",
+    "db:seed-menu": "node --experimental-strip-types scripts/seed-menu.mjs"
   },
   "dependencies": {
     "next": "^16.0.0",
