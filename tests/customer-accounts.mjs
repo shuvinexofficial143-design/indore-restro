@@ -1,0 +1,10 @@
+import {chromium} from "playwright";
+import postgres from "postgres";
+import assert from "node:assert/strict";
+import {randomBytes} from "node:crypto";
+const origin="http://127.0.0.1:3000",browser=await chromium.launch(),db=postgres(process.env.DATABASE_URL_UNPOOLED,{max:1});
+try{const page=await browser.newPage();await page.goto(origin+"/account");await page.getByRole("button",{name:"Register demo account"}).click();await page.getByLabel("Fictional name").fill("Sample Guest");await page.getByLabel("Demo email").fill("sample@example.invalid");await page.getByLabel("Password",{exact:true}).fill(randomBytes(18).toString("hex"));await page.getByRole("button",{name:"Create demo account"}).click();await page.getByRole("heading",{name:"Hello, Sample Guest"}).waitFor();await page.getByLabel("Label",{exact:true}).fill("Sample Home");await page.getByLabel("Fictional delivery address").fill("Demo Street 01");await page.getByRole("button",{name:"Save sample address"}).click();await page.getByText("Sample Home · Demo Street 01",{exact:true}).waitFor();
+const [c]=await db`select id,restaurant_id from customers where email='sample@example.invalid'`;const [address]=await db`select id from customer_addresses where customer_id=${c.id}`;
+const body={token:randomBytes(32).toString("hex"),kind:"delivery",addressId:address.id,lines:[{id:"paneer",variant:"full",addon:false,quantity:1}]};const response=await page.request.post(origin+"/api/orders",{headers:{origin,"content-type":"application/json"},data:body});assert.equal(response.status(),201,await response.text());const [o]=await db`select customer_id,delivery_address from orders where customer_id=${c.id}`;assert.equal(o.customer_id,c.id);assert.equal(o.delivery_address,"Demo Street 01");
+await page.reload();await page.getByText("delivery · ₹289",{exact:true}).waitFor();await page.getByRole("button",{name:"Sign out",exact:true}).click();await page.getByRole("button",{name:"Sign in to demo"}).waitFor();console.log("PASS fictional customer account, saved address, linked order history and logout");
+}finally{await browser.close();await db.end()}

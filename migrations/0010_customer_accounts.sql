@@ -1,0 +1,5 @@
+CREATE TABLE customers (restaurant_id uuid NOT NULL REFERENCES restaurants(id), id uuid NOT NULL DEFAULT gen_random_uuid(), email text NOT NULL CHECK(email LIKE '%@example.invalid'), name text NOT NULL, password_hash text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(restaurant_id,id), UNIQUE(restaurant_id,email));
+CREATE TABLE customer_sessions (token_hash text PRIMARY KEY, restaurant_id uuid NOT NULL, customer_id uuid NOT NULL, expires_at timestamptz NOT NULL, FOREIGN KEY(restaurant_id,customer_id) REFERENCES customers(restaurant_id,id));
+CREATE TABLE customer_addresses (restaurant_id uuid NOT NULL, customer_id uuid NOT NULL, id uuid NOT NULL DEFAULT gen_random_uuid(), label text NOT NULL, address text NOT NULL, PRIMARY KEY(restaurant_id,customer_id,id), FOREIGN KEY(restaurant_id,customer_id) REFERENCES customers(restaurant_id,id));
+ALTER TABLE orders ADD COLUMN customer_id uuid, ADD COLUMN delivery_address text, ADD FOREIGN KEY(restaurant_id,customer_id) REFERENCES customers(restaurant_id,id);
+CREATE INDEX customer_order_history_idx ON orders(restaurant_id,customer_id,created_at DESC);
