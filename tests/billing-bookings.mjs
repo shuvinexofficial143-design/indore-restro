@@ -9,7 +9,9 @@ try{
  const page=await browser.newPage();await page.goto(origin+"/login");await page.getByLabel("Staff email").fill(process.env.BOOTSTRAP_OWNER_EMAIL);await page.getByLabel("Password",{exact:true}).fill(process.env.BOOTSTRAP_OWNER_PASSWORD);await page.getByRole("button",{name:"Sign in",exact:true}).click();await page.waitForURL("**/admin");
  await page.goto(origin+"/admin/tables");await page.getByRole("button",{name:"Close session"}).click();await page.getByRole("button",{name:"Start session & QR"}).waitFor();
  await page.goto(origin+"/admin/billing");await page.getByRole("button",{name:"Generate invoice"}).click();await page.getByRole("button",{name:"Record demo payment"}).waitFor();await page.getByRole("button",{name:"Record demo payment"}).click();await page.getByText("Demo payment recorded · cash",{exact:true}).waitFor();
- const [invoice]=await db`select total_paise from invoices where restaurant_id=${r.id}`;assert.equal(invoice.total_paise,28900);
+ const [invoice]=await db`select id,total_paise from invoices where restaurant_id=${r.id}`;assert.equal(invoice.total_paise,28900);
+ assert.equal((await page.request.post(origin+"/api/payments/cashfree/checkout",{headers:{origin},data:{invoiceId:invoice.id}})).status(),404);
+ assert.equal((await page.request.post(origin+"/api/payments/cashfree/webhook",{data:{type:"PAYMENT_SUCCESS_WEBHOOK"}})).status(),404);
  const [payment]=await db`select amount_paise from payments where restaurant_id=${r.id}`;assert.equal(payment.amount_paise,28900);
  await page.getByRole("link",{name:"View receipt"}).click();await page.getByText("SAMPLE RECEIPT · NOT A TAX INVOICE").waitFor();
  const tomorrow=new Date(Date.now()+2*86400000+19800000).toISOString().slice(0,10),make=()=>({event:false,date:tomorrow,time:"18:00",guests:2,occasion:"Casual dining",token:randomBytes(32).toString("hex")});
