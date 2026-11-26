@@ -19,15 +19,16 @@ export async function getCatalog(verifiedTableRestaurantId?:string):Promise<{ite
  const items=await db.select({id:menuItems.id,name:menuItems.name,category:menuItems.category,description:menuItems.description,image:menuItems.image,veg:menuItems.veg,available:menuItems.available,pricePaise:menuItems.pricePaise,halfPaise:menuItems.halfPaise,addonPaise:menuItems.addonPaise,prepMinutes:menuItems.prepMinutes}).from(menuItems).where(eq(menuItems.restaurantId,r.id)).orderBy(menuItems.category,menuItems.name);
  return {items,enabled:items.length>0};
 }
-export async function createDemoOrder(raw:unknown){
+export async function createDemoOrder(raw:unknown,staffContext?:{restaurantId:string;tableSessionId?:string;actorId:string}){
  if(!process.env.DATABASE_URL)throw new OrderError("Demo ordering is not enabled.",503);
  const parsed=orderInput.safeParse(raw);if(!parsed.success)throw new OrderError("Invalid order details");
  const {token,lines,kind,instructions,tableToken,couponCode,addressId}=parsed.data;
- const key=tokenHash(token),requestHash=tokenHash(JSON.stringify({lines,kind,instructions,tableToken,couponCode,addressId}));
+ const key=tokenHash(token),requestHash=tokenHash(JSON.stringify({lines,kind,instructions,tableToken,couponCode,addressId,staffSession:staffContext?.tableSessionId,staffActor:staffContext?.actorId}));
  const table=tableToken?await tableContext(tableToken):null;
  if(tableToken&&!table)throw new OrderError("Table session expired",409);
- const r=table?{id:table.restaurantId}:await orderingRestaurant();if(!r)throw new OrderError("Demo restaurant unavailable",503);
- const customer=await currentCustomer(r.id);
+ if(staffContext&&tableToken)throw new OrderError("Manual orders use a selected session");
+ const r=staffContext?{id:staffContext.restaurantId}:table?{id:table.restaurantId}:await orderingRestaurant();if(!r)throw new OrderError("Demo restaurant unavailable",503);
+ const customer=staffContext?null:await currentCustomer(r.id);
  const db=database();
  return db.transaction(async tx=>{
   const mode=await lockDemoWrite(tx,r.id);if(!mode)throw new OrderError("Demo session expired",409);
@@ -35,6 +36,7 @@ export async function createDemoOrder(raw:unknown){
   if(existing){if(existing.requestHash!==requestHash||existing.restaurantId!==r.id)throw new OrderError("Order key already used",409);return {id:existing.id,totalPaise:existing.totalPaise,reused:true};}
   if(mode==="isolated"){const [count]=await tx.select({n:sql<number>`count(*)::int`}).from(orders).where(eq(orders.restaurantId,r.id));if(count.n>=100)throw new OrderError("Demo order limit reached",429);}
   let tableSessionId:string|null=null;
+  if(staffContext?.tableSessionId){if(kind!=="dine_in")throw new OrderError("Table orders must be dine-in");const [session]=await tx.select({id:tableSessions.id}).from(tableSessions).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId),eq(restaurantTables.active,true))).where(and(eq(tableSessions.restaurantId,r.id),eq(tableSessions.id,staffContext.tableSessionId),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");if(!session)throw new OrderError("Table session expired",409);tableSessionId=session.id;}
   if(tableToken){if(kind!=="dine_in")throw new OrderError("Table orders must be dine-in");const [session]=await tx.select({id:tableSessions.id}).from(tableSessions).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId),eq(restaurantTables.active,true))).where(and(eq(tableSessions.restaurantId,r.id),eq(tableSessions.tokenHash,tokenHash(tableToken)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");if(!session)throw new OrderError("Table session expired",409);tableSessionId=session.id;}
   let deliveryAddress:string|null=null;
   if(addressId){if(kind!=="delivery"||!customer)throw new OrderError("Sign in to use a saved sample address",400);const [address]=await tx.select({address:customerAddresses.address}).from(customerAddresses).where(and(eq(customerAddresses.restaurantId,r.id),eq(customerAddresses.customerId,customer.id),eq(customerAddresses.id,addressId)));if(!address)throw new OrderError("Sample address unavailable",400);deliveryAddress=address.address;}
@@ -57,7 +59,7 @@ export async function createDemoOrder(raw:unknown){
   if(!order){const [prior]=await tx.select().from(orders).where(eq(orders.trackingHash,key));if(!prior||prior.requestHash!==requestHash||prior.restaurantId!==r.id)throw new OrderError("Order key already used",409);return {id:prior.id,totalPaise:prior.totalPaise,reused:true};}
   if(couponCode)await tx.insert(couponUsages).values({restaurantId:r.id,orderId:order.id,code:couponCode,discountPaise:pricing.discountPaise});
   await tx.insert(orderItems).values(snapshots.map(l=>({...l,orderId:order.id})));
-  await tx.insert(orderStatusHistory).values({restaurantId:r.id,orderId:order.id,status:"pending"});
+  await tx.insert(orderStatusHistory).values({restaurantId:r.id,orderId:order.id,status:"pending",actorUserId:staffContext?.actorId??null});
   return {...order,reused:false};
  });
 }
