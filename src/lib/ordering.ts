@@ -1,11 +1,11 @@
-import {and,eq,inArray,desc,isNull,gt} from "drizzle-orm";
+import {and,eq,inArray,desc,isNull,gt,sql} from "drizzle-orm";
 import {z} from "zod";
 import {database} from "@/lib/db";
 import {restaurants,menuItems,orders,orderItems,orderStatusHistory,tableSessions,restaurantTables} from "@/lib/db/schema";
 import {sampleCatalog,type CatalogItem} from "@/lib/catalog";
 import {unitPrice} from "@/lib/domain/cart";
 import {tokenHash} from "@/lib/domain/auth";
-import {orderingRestaurant,allowedRestaurant,tableContext} from "@/lib/demo-context";
+import {orderingRestaurant,allowedRestaurant,tableContext,lockDemoWrite} from "@/lib/demo-context";
 import {consumeOrder} from "@/lib/inventory";
 import {canTransition,type OrderStatus} from "@/lib/domain/order";
 export const tokenSchema=z.string().regex(/^[a-f0-9]{64}$/);
@@ -14,7 +14,6 @@ export class OrderError extends Error{constructor(message:string,public status=4
 export async function getCatalog(verifiedTableRestaurantId?:string):Promise<{items:CatalogItem[];enabled:boolean}>{
  const r=verifiedTableRestaurantId?(await allowedRestaurant(verifiedTableRestaurantId)?{id:verifiedTableRestaurantId}:null):await orderingRestaurant();
  if(!r)return {items:sampleCatalog,enabled:false};const db=database();
- if(!r)return {items:sampleCatalog,enabled:false};
  const items=await db.select({id:menuItems.id,name:menuItems.name,category:menuItems.category,description:menuItems.description,image:menuItems.image,veg:menuItems.veg,available:menuItems.available,pricePaise:menuItems.pricePaise,halfPaise:menuItems.halfPaise,addonPaise:menuItems.addonPaise,prepMinutes:menuItems.prepMinutes}).from(menuItems).where(eq(menuItems.restaurantId,r.id)).orderBy(menuItems.category,menuItems.name);
  return {items,enabled:items.length>0};
 }
@@ -28,8 +27,10 @@ export async function createDemoOrder(raw:unknown){
  const r=table?{id:table.restaurantId}:await orderingRestaurant();if(!r)throw new OrderError("Demo restaurant unavailable",503);
  const db=database();
  return db.transaction(async tx=>{
+  const mode=await lockDemoWrite(tx,r.id);if(!mode)throw new OrderError("Demo session expired",409);
   const [existing]=await tx.select({id:orders.id,requestHash:orders.requestHash,restaurantId:orders.restaurantId,totalPaise:orders.totalPaise}).from(orders).where(eq(orders.trackingHash,key));
   if(existing){if(existing.requestHash!==requestHash||existing.restaurantId!==r.id)throw new OrderError("Order key already used",409);return {id:existing.id,totalPaise:existing.totalPaise,reused:true};}
+  if(mode==="isolated"){const [count]=await tx.select({n:sql<number>`count(*)::int`}).from(orders).where(eq(orders.restaurantId,r.id));if(count.n>=100)throw new OrderError("Demo order limit reached",429);}
   let tableSessionId:string|null=null;
   if(tableToken){if(kind!=="dine_in")throw new OrderError("Table orders must be dine-in");const [session]=await tx.select({id:tableSessions.id}).from(tableSessions).innerJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId),eq(restaurantTables.active,true))).where(and(eq(tableSessions.restaurantId,r.id),eq(tableSessions.tokenHash,tokenHash(tableToken)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");if(!session)throw new OrderError("Table session expired",409);tableSessionId=session.id;}
   const items=await tx.select().from(menuItems).where(and(eq(menuItems.restaurantId,r.id),inArray(menuItems.id,lines.map(l=>l.id)))).for("share");

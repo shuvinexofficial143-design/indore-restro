@@ -34,3 +34,14 @@ export async function tableContext(token:string){
  if(!t||!await allowedRestaurant(t.restaurantId))return null;return t;
 }
 export async function revokeCurrentDemo(){const jar=await cookies(),token=jar.get(demoCookie)?.value;if(token&&/^[a-f0-9]{64}$/.test(token)&&process.env.DATABASE_URL){await database().update(demoSessions).set({revokedAt:new Date()}).where(and(eq(demoSessions.tokenHash,tokenHash(token)),isNull(demoSessions.revokedAt)));}jar.delete(demoCookie);jar.delete(demoRoleCookie)}
+
+type Tx=Parameters<Parameters<ReturnType<typeof database>["transaction"]>[0]>[0];
+// Serialize tenant writes and recheck expiry/revocation inside the transaction.
+export async function lockDemoWrite(tx:Tx,restaurantId:string){
+ const [r]=await tx.select({slug:restaurants.slug,demo:restaurants.demo}).from(restaurants).where(eq(restaurants.id,restaurantId)).for("update");
+ if(!r?.demo)return null;
+ if(r.slug==="royal-table")return process.env.ENABLE_DEMO_ORDERS==="1"?"base":null;
+ if(!demoEnabled())return null;
+ const [s]=await tx.select({restaurantId:demoSessions.restaurantId}).from(demoSessions).where(and(eq(demoSessions.restaurantId,restaurantId),isNull(demoSessions.revokedAt),gt(demoSessions.expiresAt,new Date()))).for("share");
+ return s?"isolated":null;
+}

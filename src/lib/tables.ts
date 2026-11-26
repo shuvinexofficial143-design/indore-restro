@@ -2,7 +2,7 @@ import {and,eq,gt,isNull,desc,inArray} from "drizzle-orm";
 import {database} from "@/lib/db";
 import {restaurantTables,tableSessions,waiterRequests,restaurants,staff,users,orders} from "@/lib/db/schema";
 import {newToken,tokenHash} from "@/lib/domain/auth";
-import {tableContext} from "@/lib/demo-context";
+import {tableContext,lockDemoWrite} from "@/lib/demo-context";
 import {OrderError} from "@/lib/ordering";
 export async function getTable(token:string){return tableContext(token)}
 export async function listTables(restaurantId:string){
@@ -39,6 +39,7 @@ export async function closeTable(restaurantId:string,id:string){
 export async function createTableRequest(token:string,kind:"waiter"|"bill"){
  const context=await tableContext(token);if(!context)throw new OrderError("Session expired",404);
  await database().transaction(async tx=>{
+  if(!await lockDemoWrite(tx,context.restaurantId))throw new OrderError("Session expired",404);
   const [s]=await tx.select({id:tableSessions.id,restaurantId:tableSessions.restaurantId}).from(tableSessions).innerJoin(restaurants,and(eq(restaurants.id,tableSessions.restaurantId),eq(restaurants.demo,true))).where(and(eq(tableSessions.restaurantId,context.restaurantId),eq(tableSessions.tokenHash,tokenHash(token)),isNull(tableSessions.closedAt),gt(tableSessions.expiresAt,new Date()))).for("update");
   if(!s)throw new OrderError("Session expired",404);
   await tx.insert(waiterRequests).values({restaurantId:s.restaurantId,sessionId:s.id,kind}).onConflictDoNothing();

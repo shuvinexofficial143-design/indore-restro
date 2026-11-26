@@ -23,7 +23,7 @@ try{
  await guest.getByRole("button",{name:"Continue to checkout"}).click();
  const submission=guest.waitForResponse(r=>r.url().endsWith("/api/orders")&&r.request().method()==="POST");
  await guest.getByRole("button",{name:"Place demo order"}).click();
- const response=await submission;assert.equal(response.status(),201,await response.text());
+ const response=await submission;assert.equal(response.status(),201,"Customer order response");
  await guest.waitForURL("**/track/**");
  await guest.getByRole("heading",{name:"pending",exact:true}).waitFor();
  const tracking=guest.url().split("/").pop();
@@ -41,6 +41,8 @@ try{
  assert.equal((await post("/api/table-requests",{token:tableToken,kind:"waiter"})).status(),200);
  const [requests]=await db`select count(*)::int as n from waiter_requests where session_id=${session.id}`;assert.equal(requests.n,1);
  async function staff(email){const p=await browser.newPage();await p.goto(origin+"/login");await p.getByLabel("Staff email").fill(email);await p.getByLabel("Password",{exact:true}).fill(process.env.BOOTSTRAP_OWNER_PASSWORD);await p.getByRole("button",{name:"Sign in",exact:true}).click();await p.waitForURL(/\/(admin|staff)$/);return p}
+ const [ingredient]=await db`insert into inventory_items(restaurant_id,name,unit,stock,reorder_level) values(${r.id},'Test Paneer','g',1000,100) returning id`;
+ await db`insert into recipes(restaurant_id,menu_id,inventory_id,full_amount,half_amount,addon_amount) values(${r.id},'paneer',${ingredient.id},150,75,0)`;
  const owner=await staff(process.env.BOOTSTRAP_OWNER_EMAIL);await owner.goto(origin+"/admin/orders");await owner.getByRole("button",{name:"accepted",exact:true}).click();
  const k=await staff("kitchen@example.invalid");await k.goto(origin+"/kitchen");await k.getByRole("button",{name:"preparing",exact:true}).click();await k.getByRole("button",{name:"ready",exact:true}).click();
  const w=await staff("waiter@example.invalid");await w.goto(origin+"/waiter");await w.getByRole("button",{name:"Mark request complete"}).click();await w.getByRole("button",{name:"served",exact:true}).click();
@@ -48,6 +50,8 @@ try{
  await owner.reload();await owner.getByRole("button",{name:"completed",exact:true}).click();
  await owner.getByRole("button",{name:"completed",exact:true}).waitFor({state:"hidden"});
  const [final]=await db`select status from orders where id=${order.id}`;assert.equal(final.status,"completed");
+ const [stock]=await db`select stock from inventory_items where restaurant_id=${r.id} and id=${ingredient.id}`;assert.equal(stock.stock,850);
+ const [movement]=await db`select count(*)::int as n from inventory_transactions where order_id=${order.id}`;assert.equal(movement.n,1);
  console.log("PASS QR table customer cart, server price, idempotency, out-of-stock, invalid table, duplicate waiter request, owner→kitchen→waiter→tracking");
 }finally{await browser.close();await db.end()}
 
