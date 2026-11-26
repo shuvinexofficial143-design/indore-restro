@@ -1,0 +1,3 @@
+# AI integration status
+The current menu assistant is a deterministic catalog-based simulation, not a connected LLM. It searches actual visible sample dishes, prices and diet categories. It does not claim to know allergens or real availability outside the catalog; it does not autonomously order or book. No AI API key is required.
+Future external AI, Instagram, WhatsApp or phone assistant integration requires approved provider credentials, explicit consent and verified permissions. Use server-side tool validation, tenant scoping, explicit confirmation before mutations, safe logging and rate limits. Never send personal or secret data to external services without authorization.
