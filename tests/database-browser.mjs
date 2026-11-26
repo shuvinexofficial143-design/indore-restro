@@ -16,7 +16,7 @@ try{
  const page=await browser.newPage();
  await page.goto(origin+"/admin");await page.waitForURL("**/login");
  async function login(email,pw){await page.getByLabel("Staff email").fill(email);await page.getByLabel("Password",{exact:true}).fill(pw);await page.getByRole("button",{name:"Sign in",exact:true}).click()}
- await login(process.env.BOOTSTRAP_OWNER_EMAIL,"wrong");await page.getByRole("alert").getByText("Invalid email or password.").waitFor();
+ await login(process.env.BOOTSTRAP_OWNER_EMAIL,"wrong");await page.locator("form [role=alert]").waitFor();assert.equal(await page.locator("form [role=alert]").textContent(),"Invalid email or password.");
  await login(process.env.BOOTSTRAP_OWNER_EMAIL,password);await page.waitForURL("**/admin");await page.getByRole("heading",{name:"The Royal Table"}).waitFor();
  const cookie=(await page.context().cookies()).find(c=>c.name==="royal_session");assert.ok(cookie?.httpOnly&&cookie.secure);assert.equal(cookie.sameSite,"Lax");
  const [count]=await db`select count(*)::int as n from sessions`;assert.equal(count.n,1);

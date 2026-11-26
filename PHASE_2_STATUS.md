@@ -1,0 +1,2 @@
+# Phase 2 status — 2026-11-26
+Draft PR #1. Database integration CI on isolated PostgreSQL 17 previously passed migrations (including repeat application), seed and production build; failed at invalid-login browser assertion. SQL throttling timestamp handling revised and assertion made explicit; rerun pending. Phase 1 booking accessible labels synced from main. No live Neon project or deployment connected. No credentials committed.

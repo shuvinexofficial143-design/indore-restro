@@ -15,8 +15,8 @@ export async function login(_previous:string,form:FormData):Promise<string>{
  if(!process.env.DATABASE_URL)return "Database setup is pending. Sign-in is unavailable.";
  let destination="/staff";
  try{
-  const db=database(),{email,password}=parsed.data,now=new Date(),limit=new Date(now.getTime()-15*60*1000),key=tokenHash(email);
-  const [attempt]=await db.insert(loginAttempts).values({key,count:1,windowStart:now}).onConflictDoUpdate({target:loginAttempts.key,set:{count:sql`case when ${loginAttempts.windowStart} < ${limit} then 1 else ${loginAttempts.count}+1 end`,windowStart:sql`case when ${loginAttempts.windowStart} < ${limit} then ${now} else ${loginAttempts.windowStart} end`}}).returning({count:loginAttempts.count});
+  const db=database(),{email,password}=parsed.data,now=new Date(),key=tokenHash(email);
+  const [attempt]=await db.insert(loginAttempts).values({key,count:1,windowStart:now}).onConflictDoUpdate({target:loginAttempts.key,set:{count:sql`case when ${loginAttempts.windowStart} < now() - interval '15 minutes' then 1 else ${loginAttempts.count}+1 end`,windowStart:sql`case when ${loginAttempts.windowStart} < now() - interval '15 minutes' then now() else ${loginAttempts.windowStart} end`}}).returning({count:loginAttempts.count});
   if(attempt.count>8)return "Too many sign-in attempts. Try again in 15 minutes.";
   const [row]=await db.select({id:users.id,hash:users.passwordHash,restaurantId:staff.restaurantId,role:staff.role}).from(users).innerJoin(staff,eq(users.id,staff.userId)).where(and(eq(users.email,email),eq(users.active,true),eq(staff.active,true))).limit(1);
   const valid=await verifyPassword(password,row?.hash??dummy);
@@ -25,7 +25,7 @@ export async function login(_previous:string,form:FormData):Promise<string>{
   await db.transaction(async tx=>{if(old)await tx.delete(sessions).where(eq(sessions.tokenHash,tokenHash(old)));await tx.insert(sessions).values({tokenHash:tokenHash(token),userId:row.id,restaurantId:row.restaurantId,expiresAt});await tx.delete(loginAttempts).where(eq(loginAttempts.key,key));});
   jar.set(sessionCookie,token,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",expires:expiresAt});
   destination=row.role==="owner"||row.role==="manager"?"/admin":"/staff";
- }catch{return "Sign-in is temporarily unavailable."}
+ }catch(error){const cause=error instanceof Error ? error.cause : undefined; const code=cause && typeof cause==="object" && "code" in cause ? String(cause.code) : "unknown"; console.error("Staff login failed",{code});return "Sign-in is temporarily unavailable."}
  redirect(destination);
 }
 export async function logout(){
