@@ -1,4 +1,4 @@
-export type CatalogItem={id:string;name:string;category:string;pricePaise:number;veg:boolean;description:string;image:string|null;halfPaise:number|null;addonPaise:number|null;prepMinutes:number;available:boolean};
+export type CatalogItem={id:string;name:string;category:string;pricePaise:number;veg:boolean;description:string;image:string|null;halfPaise:number|null;addonPaise:number|null;prepMinutes:number;available:boolean;sortOrder?:number;special?:boolean};
 export const sampleCatalog: CatalogItem[] = [
   {
     "id": "tikka",

@@ -16,7 +16,7 @@ export class OrderError extends Error{constructor(message:string,public status=4
 export async function getCatalog(verifiedTableRestaurantId?:string):Promise<{items:CatalogItem[];enabled:boolean}>{
  const r=verifiedTableRestaurantId?(await allowedRestaurant(verifiedTableRestaurantId)?{id:verifiedTableRestaurantId}:null):await orderingRestaurant();
  if(!r)return {items:sampleCatalog,enabled:false};const db=database();
- const items=await db.select({id:menuItems.id,name:menuItems.name,category:menuItems.category,description:menuItems.description,image:menuItems.image,veg:menuItems.veg,available:menuItems.available,pricePaise:menuItems.pricePaise,halfPaise:menuItems.halfPaise,addonPaise:menuItems.addonPaise,prepMinutes:menuItems.prepMinutes}).from(menuItems).where(eq(menuItems.restaurantId,r.id)).orderBy(menuItems.category,menuItems.name);
+ const items=await db.select({id:menuItems.id,name:menuItems.name,category:menuItems.category,description:menuItems.description,image:menuItems.image,veg:menuItems.veg,available:menuItems.available,pricePaise:menuItems.pricePaise,halfPaise:menuItems.halfPaise,addonPaise:menuItems.addonPaise,prepMinutes:menuItems.prepMinutes,sortOrder:menuItems.sortOrder,special:menuItems.special}).from(menuItems).where(eq(menuItems.restaurantId,r.id)).orderBy(menuItems.category,menuItems.sortOrder,menuItems.name);
  return {items,enabled:items.length>0};
 }
 export async function createDemoOrder(raw:unknown,staffContext?:{restaurantId:string;tableSessionId?:string;actorId:string}){
@@ -75,7 +75,7 @@ export async function trackDemoOrder(token:string){
 export async function staffOrders(restaurantId:string,waiterId?:string){
  const db=database();
  const rows=await db.select({id:orders.id,kind:orders.kind,status:orders.status,totalPaise:orders.totalPaise,createdAt:orders.createdAt,instructions:orders.instructions,tableLabel:restaurantTables.label}).from(orders).leftJoin(tableSessions,and(eq(tableSessions.restaurantId,orders.restaurantId),eq(tableSessions.id,orders.tableSessionId))).leftJoin(restaurantTables,and(eq(restaurantTables.restaurantId,tableSessions.restaurantId),eq(restaurantTables.id,tableSessions.tableId))).where(and(eq(orders.restaurantId,restaurantId),waiterId?eq(tableSessions.waiterUserId,waiterId):undefined)).orderBy(desc(orders.createdAt)).limit(100);
- const items=rows.length?await db.select({id:orderItems.id,orderId:orderItems.orderId,name:orderItems.name,variant:orderItems.variant,addon:orderItems.addon,quantity:orderItems.quantity}).from(orderItems).where(and(eq(orderItems.restaurantId,restaurantId),inArray(orderItems.orderId,rows.map(o=>o.id)))):[];
+ const items=rows.length?await db.select({id:orderItems.id,orderId:orderItems.orderId,name:orderItems.name,variant:orderItems.variant,addon:orderItems.addon,quantity:orderItems.quantity,readyAt:orderItems.readyAt}).from(orderItems).where(and(eq(orderItems.restaurantId,restaurantId),inArray(orderItems.orderId,rows.map(o=>o.id)))):[];
  return rows.map(o=>({...o,items:items.filter(l=>l.orderId===o.id)}));
 }
 export async function transitionOrder(restaurantId:string,userId:string,id:string,to:OrderStatus,waiterId?:string){
@@ -84,8 +84,18 @@ export async function transitionOrder(restaurantId:string,userId:string,id:strin
   if(!o||!canTransition(o.status,to,o.kind))throw new OrderError("Invalid order transition",409);
   if(waiterId){if(!o.tableSessionId)throw new OrderError("Forbidden",403);const [assigned]=await tx.select({id:tableSessions.id}).from(tableSessions).where(and(eq(tableSessions.restaurantId,restaurantId),eq(tableSessions.id,o.tableSessionId),eq(tableSessions.waiterUserId,waiterId),isNull(tableSessions.closedAt)));if(!assigned)throw new OrderError("Forbidden",403);}
 
+  if(to==="ready")await tx.update(orderItems).set({readyAt:new Date(),readyBy:userId}).where(and(eq(orderItems.restaurantId,restaurantId),eq(orderItems.orderId,id),isNull(orderItems.readyAt)));
   if(to==="completed")await consumeOrder(tx,restaurantId,id,userId);
   await tx.update(orders).set({status:to,updatedAt:new Date()}).where(and(eq(orders.restaurantId,restaurantId),eq(orders.id,id)));
   await tx.insert(orderStatusHistory).values({restaurantId,orderId:id,status:to,actorUserId:userId});
+ });
+}
+
+export async function markDishReady(restaurantId:string,userId:string,orderId:string,lineId:string){
+ await database().transaction(async tx=>{
+ const [o]=await tx.select({id:orders.id,status:orders.status}).from(orders).where(and(eq(orders.restaurantId,restaurantId),eq(orders.id,orderId))).for("update");
+ if(!o||o.status!=="preparing")throw new OrderError("Order must be preparing");
+ const [line]=await tx.select({id:orderItems.id,readyAt:orderItems.readyAt}).from(orderItems).where(and(eq(orderItems.restaurantId,restaurantId),eq(orderItems.orderId,orderId),eq(orderItems.id,lineId)));if(!line)throw new OrderError("Order item unavailable");
+ if(!line.readyAt)await tx.update(orderItems).set({readyAt:new Date(),readyBy:userId}).where(and(eq(orderItems.restaurantId,restaurantId),eq(orderItems.orderId,orderId),eq(orderItems.id,lineId)));
  });
 }
